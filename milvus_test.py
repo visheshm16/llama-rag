@@ -55,11 +55,7 @@ vector_store = Milvus(
     embedding_function=embeddings,
     connection_args={"uri": 'http://localhost:19530'},
     collection_name=collection_name,
-    index_params={
-        "index_type": "IVF_FLAT",
-        "metric_type": "COSINE",
-        "params": {"nlist": 128}
-    },
+    index_params=index_params,
     text_field="text",
     vector_field="embedding",
     auto_id=True,
