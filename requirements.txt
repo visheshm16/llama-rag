@@ -1,0 +1,12 @@
+transformers>=4.43.0
+huggingface
+accelerate
+bitsandbytes
+pymilvus
+langchain
+python-dotenv
+langchain_milvus
+langchain
+langchain_community
+langchain-huggingface
+sentence_transformers
