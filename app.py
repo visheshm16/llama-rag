@@ -46,7 +46,7 @@ if __name__ == '__main__' or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
     print("Embedding model loaded ✅")
 
     # --- Define Text Splitter ---
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=200)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1024, chunk_overlap=200)
 
     # --- Connect to Milvus ---
     connections.connect(
@@ -237,4 +237,4 @@ You may hold basic conversation with the user and interact with them, use contex
     return jsonify({"message": final_response}), 200
 
 if __name__ == '__main__':
-    app.run(debug=True, host='127.0.0.1', port=5000)
+    app.run(debug=False, host='127.0.0.1', port=8000)

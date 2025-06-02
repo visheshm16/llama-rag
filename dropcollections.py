@@ -15,5 +15,5 @@ print(existing_collections)
 
 
 
-# for c in existing_collections:
-#     utility.drop_collection(c)
+for c in existing_collections:
+    utility.drop_collection(c)

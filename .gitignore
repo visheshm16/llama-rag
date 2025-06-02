@@ -2,6 +2,7 @@
 milvus/
 huggingface_model/
 huggingface_embedder/
+logs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
