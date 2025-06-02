@@ -10,3 +10,6 @@ langchain
 langchain_community
 langchain-huggingface
 sentence_transformers
+flask
+flask-cors
+PyPDF2
