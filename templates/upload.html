@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Upload</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .upload-area {
+            border: 2px dashed #dee2e6;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            background-color: #f8f9fa;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .upload-area:hover {
+            border-color: #0d6efd;
+            background-color: #e7f3ff;
+        }
+        .upload-area.dragover {
+            border-color: #0d6efd;
+            background-color: #e7f3ff;
+        }
+        .file-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .file-item {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            padding: 8px 12px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            margin-bottom: 5px;
+        }
+        .progress {
+            height: 8px;
+        }
+        .status-icon {
+            margin-left: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card shadow">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="mb-0"><i class="fas fa-upload me-2"></i>Document Upload</h4>
+                    </div>
+                    <div class="card-body">
+                        <!-- Upload Area -->
+                        <div class="upload-area" id="uploadArea">
+                            <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">Drop files here or click to select</h5>
+                            <p class="text-muted mb-0">Supports PDF files • Multiple files allowed</p>
+                            <input type="file" id="fileInput" multiple accept=".pdf" style="display: none;">
+                        </div>
+
+                        <!-- Selected Files List -->
+                        <div id="fileListContainer" class="mt-4" style="display: none;">
+                            <h6><i class="fas fa-list me-2"></i>Selected Files</h6>
+                            <div id="fileList" class="file-list"></div>
+                        </div>
+
+                        <!-- Upload Button -->
+                        <div class="text-center mt-4">
+                            <button id="uploadBtn" class="btn btn-success btn-lg" disabled>
+                                <i class="fas fa-upload me-2"></i>Upload Documents
+                            </button>
+                            <button id="clearBtn" class="btn btn-outline-secondary btn-lg ms-2" disabled>
+                                <i class="fas fa-trash me-2"></i>Clear All
+                            </button>
+                        </div>
+
+                        <!-- Progress Bar -->
+                        <div id="progressContainer" class="mt-4" style="display: none;">
+                            <div class="progress">
+                                <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <div id="progressText" class="text-center mt-2">Processing...</div>
+                        </div>
+
+                        <!-- Alert Messages -->
+                        <div id="alertContainer" class="mt-4"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            let selectedFiles = [];
+
+            // Upload area click handler
+            $('#uploadArea').click(function() {
+                $('#fileInput').click();
+            });
+
+            // File input change handler
+            $('#fileInput').change(function() {
+                handleFiles(this.files);
+            });
+
+            // Drag and drop handlers
+            $('#uploadArea').on({
+                'dragover dragenter': function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    $(this).addClass('dragover');
+                },
+                'dragleave': function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    $(this).removeClass('dragover');
+                },
+                'drop': function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    $(this).removeClass('dragover');
+                    const files = e.originalEvent.dataTransfer.files;
+                    handleFiles(files);
+                }
+            });
+
+            // Handle selected files
+            function handleFiles(files) {
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    if (file.type === 'application/pdf') {
+                        // Check if file already exists
+                        if (!selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
+                            selectedFiles.push(file);
+                        }
+                    } else {
+                        showAlert('warning', `"${file.name}" is not a PDF file and will be skipped.`);
+                    }
+                }
+                updateFileList();
+                updateButtons();
+            }
+
+            // Update file list display
+            function updateFileList() {
+                const fileList = $('#fileList');
+                fileList.empty();
+
+                if (selectedFiles.length > 0) {
+                    $('#fileListContainer').show();
+                    selectedFiles.forEach((file, index) => {
+                        const fileItem = $(`
+                            <div class="file-item">
+                                <i class="fas fa-file-pdf text-danger me-2"></i>
+                                <span class="file-name">${file.name}</span>
+                                <small class="text-muted ms-2">(${formatFileSize(file.size)})</small>
+                                <button class="btn btn-sm btn-outline-danger ms-auto" onclick="removeFile(${index})">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        `);
+                        fileList.append(fileItem);
+                    });
+                } else {
+                    $('#fileListContainer').hide();
+                }
+            }
+
+            // Remove file from list
+            window.removeFile = function(index) {
+                selectedFiles.splice(index, 1);
+                updateFileList();
+                updateButtons();
+            }
+
+            // Update button states
+            function updateButtons() {
+                const hasFiles = selectedFiles.length > 0;
+                $('#uploadBtn').prop('disabled', !hasFiles);
+                $('#clearBtn').prop('disabled', !hasFiles);
+            }
+
+            // Clear all files
+            $('#clearBtn').click(function() {
+                selectedFiles = [];
+                updateFileList();
+                updateButtons();
+                $('#fileInput').val('');
+                hideAlert();
+            });
+
+            // Upload files
+            $('#uploadBtn').click(function() {
+                if (selectedFiles.length === 0) return;
+
+                const formData = new FormData();
+                selectedFiles.forEach(file => {
+                    formData.append('files', file);
+                });
+
+                // Show progress
+                $('#progressContainer').show();
+                $('#progressBar').css('width', '0%');
+                $('#progressText').text('Uploading and processing documents...');
+                
+                // Disable buttons
+                $('#uploadBtn, #clearBtn').prop('disabled', true);
+
+                // AJAX upload
+                $.ajax({
+                    url: '/indexdoc',
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    xhr: function() {
+                        const xhr = new window.XMLHttpRequest();
+                        xhr.upload.addEventListener('progress', function(e) {
+                            if (e.lengthComputable) {
+                                const percentComplete = (e.loaded / e.total) * 100;
+                                $('#progressBar').css('width', percentComplete + '%');
+                            }
+                        });
+                        return xhr;
+                    },
+                    success: function(response) {
+                        $('#progressBar').css('width', '100%');
+                        $('#progressText').text('Upload completed successfully!');
+                        showAlert('success', response.message || 'Documents uploaded and indexed successfully!');
+                        
+                        // Clear files after successful upload
+                        setTimeout(() => {
+                            selectedFiles = [];
+                            updateFileList();
+                            updateButtons();
+                            $('#fileInput').val('');
+                            $('#progressContainer').hide();
+                        }, 2000);
+                    },
+                    error: function(xhr) {
+                        $('#progressContainer').hide();
+                        let errorMessage = 'Upload failed. Please try again.';
+                        
+                        try {
+                            const response = JSON.parse(xhr.responseText);
+                            errorMessage = response.error || errorMessage;
+                        } catch (e) {
+                            // Use default error message
+                        }
+                        
+                        showAlert('danger', errorMessage);
+                        $('#uploadBtn, #clearBtn').prop('disabled', false);
+                    }
+                });
+            });
+
+            // Utility functions
+            function formatFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+
+            function showAlert(type, message) {
+                const alertHtml = `
+                    <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                        <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-circle' : 'exclamation-triangle'} me-2"></i>
+                        ${message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                `;
+                $('#alertContainer').html(alertHtml);
+            }
+
+            function hideAlert() {
+                $('#alertContainer').empty();
+            }
+        });
+    </script>
+</body>
+</html>

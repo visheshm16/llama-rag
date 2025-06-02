@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Question Answering Assistant</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #00947b 0%, #1a567e 100%);
+            min-height: 97.5vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .container-box {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+            margin: 20px auto;
+            max-width: 85%;
+        }
+        
+        .header {
+            background: rgb(0, 29, 63);
+            color: rgb(255, 255, 255);
+            padding: 20px 30px;
+        }
+        
+        .logo-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .logo {
+            height: 50px;
+            width: auto;
+        }
+        
+        .header-title {
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin: 0;
+            text-align: center;
+            flex-grow: 1;
+        }
+        
+        .about-link {
+            color: #ffffff !important;
+            text-decoration: none;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.1);
+        }
+        
+        .about-link:hover {
+            background: rgba(255,255,255,0.2);
+            transform: translateY(-2px);
+        }
+        
+        .main-content {
+            padding: 30px;
+            display: flex;
+            gap: 30px;
+            min-height: 700px;
+        }
+        
+        .input-section {
+            flex: 1;
+            max-width: 400px;
+        }
+        
+        .chat-section {
+            flex: 2;
+        }
+        
+        .input-container {
+            margin-bottom: 20px;
+        }
+        
+        .form-label {
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        
+        .form-control {
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+        }
+        
+        .form-control:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .btn {
+            border-radius: 25px;
+            padding: 12px 24px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: none;
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            flex: 2;
+        }
+        
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #dc3545, #e74c3c);
+            flex: 1;
+        }
+        
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(220, 53, 69, 0.4);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            transform: none !important;
+        }
+        
+        .chat-box {
+            background: #e7e7e7;
+            border-radius: 15px;
+            padding: 20px;
+            height: 90%;
+            overflow-y: auto;
+            border: 1px solid #e9ecef;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            padding: 15px;
+            border-radius: 15px;
+            max-width: 85%;
+            word-wrap: break-word;
+        }
+        
+        .user-message {
+            background: linear-gradient(135deg, #00947b, #1a567e);
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 5px;
+        }
+        
+        .bot-message {
+            background: white;
+            border: 2px solid #e9ecef;
+            margin-right: auto;
+            border-bottom-left-radius: 5px;
+        }
+        
+        .message-header {
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+        
+        .user-message .message-header {
+            color: rgba(255,255,255,0.9);
+        }
+        
+        .bot-message .message-header {
+            color: #1a567e;
+        }
+        
+        .loader-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: #666;
+            font-style: italic;
+        }
+        
+        .typing-dots {
+            display: flex;
+            gap: 3px;
+        }
+        
+        .typing-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #1a567e;
+            animation: typing 1.4s infinite;
+        }
+        
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-10px); }
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+                padding: 20px;
+            }
+            
+            .input-section {
+                max-width: none;
+            }
+            
+            .header-title {
+                font-size: 1.4rem;
+            }
+            
+            .logo-container {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-box">
+        <div class="header">
+            <div class="logo-container">
+                <img class="logo" src="https://adamastech.in/wp-content/themes/atc-child/assets/images/atc-foot-logo.png" alt="ATC Logo">
+                <h1 class="header-title">Interactive Question Answering Assistant</h1>
+                <a href="https://adamastechconsulting.com/about-us/" 
+                   class="about-link"
+                   target="_blank" 
+                   rel="noopener noreferrer">
+                    <i class="fas fa-info-circle me-2"></i>About Us
+                </a>
+            </div>
+        </div>
+        
+        <div class="loader-overlay" id="loader">
+            <div class="spinner"></div>
+        </div>
+        
+        <div class="main-content">
+            <div class="input-section">
+                <div class="input-container">
+                    <label for="userinput" class="form-label h5">
+                        <i class="fas fa-question-circle me-2"></i>Ask your question...
+                    </label>
+                    <textarea class="form-control" 
+                              id="userinput" 
+                              rows="4" 
+                              placeholder="Type your message here..."
+                              maxlength="1000"></textarea>
+                    <div class="text-muted mt-2">
+                        <small><span id="charCount">0</span>/1000 characters</small>
+                    </div>
+                </div>
+                
+                <div class="button-group">
+                    <button type="button" class="btn btn-success" id="submit-btn">
+                        <i class="fas fa-paper-plane me-2"></i>Send Message
+                    </button>
+                    <button type="button" class="btn btn-danger" id="clear-btn">
+                        <i class="fas fa-trash me-2"></i>Clear
+                    </button>
+                </div>
+                
+                <div class="mt-4">
+                    <a href="/uploaddocument" class="btn btn-outline-primary w-100">
+                        <i class="fas fa-upload me-2"></i>Upload Documents
+                    </a>
+                </div>
+            </div>
+            
+            <div class="chat-section">
+                <h5 class="mb-3">
+                    <i class="fas fa-comments me-2"></i>Conversation History
+                </h5>
+                <div class="chat-box" id="modelresponse">
+                    <div class="message bot-message">
+                        <div class="message-header">
+                            <i class="fas fa-robot me-2"></i>Info-Fetcher
+                        </div>
+                        Hello! How can I help you today? Ask me anything about your uploaded documents.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            let isProcessing = false;
+            
+            // Character counter
+            $('#userinput').on('input', function() {
+                const count = $(this).val().length;
+                $('#charCount').text(count);
+                
+                if (count > 950) {
+                    $('#charCount').addClass('text-warning');
+                } else {
+                    $('#charCount').removeClass('text-warning');
+                }
+            });
+            
+            // Auto-resize textarea
+            $('#userinput').on('input', function() {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight) + 'px';
+            });
+            
+            // Send message on Enter (Shift+Enter for new line)
+            $('#userinput').keydown(function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+            
+            // Submit button click
+            $('#submit-btn').click(function() {
+                sendMessage();
+            });
+            
+            // Clear button click
+            $('#clear-btn').click(function() {
+                clearChat();
+            });
+            
+            function sendMessage() {
+                if (isProcessing) return;
+                
+                const userInput = $('#userinput').val().trim();
+                if (!userInput) {
+                    showAlert('warning', 'Please enter a question first.');
+                    return;
+                }
+                
+                // Add user message to chat
+                appendMessage('user', userInput);
+                
+                // Clear input and reset height
+                $('#userinput').val('').css('height', 'auto');
+                $('#charCount').text('0');
+                
+                // Show typing indicator
+                showTypingIndicator();
+                
+                // Disable form
+                setFormState(false);
+                
+                // Send AJAX request
+                $.ajax({
+                    url: '/fetchreponse',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ query: userInput }),
+                    success: function(response) {
+                        hideTypingIndicator();
+                        const botResponse = response.message || 'I received your question but couldn\'t generate a proper response.';
+                        appendMessage('bot', botResponse);
+                    },
+                    error: function(xhr) {
+                        hideTypingIndicator();
+                        let errorMessage = 'Sorry, I encountered an error while processing your request.';
+                        
+                        try {
+                            const response = JSON.parse(xhr.responseText);
+                            errorMessage = response.error || errorMessage;
+                        } catch (e) {
+                            // Use default error message
+                        }
+                        
+                        appendMessage('bot', errorMessage, true);
+                    },
+                    complete: function() {
+                        setFormState(true);
+                        $('#userinput').focus();
+                    }
+                });
+            }
+            
+            function appendMessage(sender, content, isError = false) {
+                const timestamp = new Date().toLocaleTimeString();
+                const messageClass = sender === 'user' ? 'user-message' : 'bot-message';
+                const icon = sender === 'user' ? 'fas fa-user' : 'fas fa-robot';
+                const senderName = sender === 'user' ? 'You' : 'Info-Fetcher';
+                
+                let messageHtml = `
+                    <div class="message ${messageClass}">
+                        <div class="message-header">
+                            <i class="${icon} me-2"></i>${senderName}
+                            <small class="ms-2 opacity-75">${timestamp}</small>
+                        </div>
+                        <div class="message-content">${content}</div>
+                    </div>
+                `;
+                
+                if (isError) {
+                    messageHtml = messageHtml.replace('bot-message', 'bot-message border-danger');
+                }
+                
+                $('#modelresponse').append(messageHtml);
+                scrollToBottom();
+            }
+            
+            function showTypingIndicator() {
+                const typingHtml = `
+                    <div class="message bot-message typing-indicator" id="typing-indicator">
+                        <div class="message-header">
+                            <i class="fas fa-robot me-2"></i>Info-Fetcher
+                        </div>
+                        <div class="typing-dots">
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
+                        </div>
+                        <span class="ms-2">is typing...</span>
+                    </div>
+                `;
+                $('#modelresponse').append(typingHtml);
+                scrollToBottom();
+            }
+            
+            function hideTypingIndicator() {
+                $('#typing-indicator').remove();
+            }
+            
+            function clearChat() {
+                $('#modelresponse').html(`
+                    <div class="message bot-message">
+                        <div class="message-header">
+                            <i class="fas fa-robot me-2"></i>Info-Fetcher
+                        </div>
+                        Hello! How can I help you today? Ask me anything about your uploaded documents.
+                    </div>
+                `);
+            }
+            
+            function setFormState(enabled) {
+                isProcessing = !enabled;
+                $('#submit-btn, #clear-btn, #userinput').prop('disabled', !enabled);
+                
+                if (enabled) {
+                    $('#submit-btn').html('<i class="fas fa-paper-plane me-2"></i>Send Message');
+                } else {
+                    $('#submit-btn').html('<i class="fas fa-spinner fa-spin me-2"></i>Processing...');
+                }
+            }
+            
+            function scrollToBottom() {
+                const chatBox = $('#modelresponse');
+                chatBox.scrollTop(chatBox[0].scrollHeight);
+            }
+            
+            function showAlert(type, message) {
+                // You can implement a toast notification here if needed
+                console.log(`${type}: ${message}`);
+            }
+            
+            // Focus on input when page loads
+            $('#userinput').focus();
+        });
+    </script>
+</body>
+</html>
