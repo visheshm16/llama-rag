@@ -20,11 +20,18 @@ model = None
 embeddings = None
 pipe = None
 
-if __name__ == '__main__' or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+# if __name__ == '__main__' or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+def initialize_models():
+    """Initialize all models and components"""
+    global text_splitter, vector_store, tokenizer, model, embeddings, pipe
+    
+    if text_splitter is not None:  # Already initialized
+        return
+    
     print("Starting library imports...")
-    from PyPDF2 import PdfReader
+    # from PyPDF2 import PdfReader
     from langchain.text_splitter import RecursiveCharacterTextSplitter
-    from langchain_core.documents import Document
+    # from langchain_core.documents import Document
     from langchain_milvus import Milvus
     from pymilvus import connections, Collection, CollectionSchema, FieldSchema, DataType, utility
     from langchain_huggingface import HuggingFaceEmbeddings
@@ -103,6 +110,9 @@ if __name__ == '__main__' or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
     # )
     # print("Pipeline created ✅")
 
+# Initialize models when module is imported (works with both Flask dev server and Gunicorn)
+initialize_models()
+
 app = Flask(__name__)
 CORS(app)
 
@@ -116,9 +126,8 @@ def upload_document():
 
 @app.route('/indexdoc', methods=['POST'])
 def index_document():
-    # Import classes here to ensure they're available
-    # from PyPDF2 import PdfReader
-    # from langchain_core.documents import Document
+    from PyPDF2 import PdfReader
+    from langchain_core.documents import Document
     
     uploaded_files = request.files.getlist('files')
     if not uploaded_files:
@@ -205,7 +214,9 @@ You may hold basic conversation with the user and interact with them, use contex
 <|assistant|>
 """
     
-    inputs = tokenizer(prompt, return_tensors="pt").to('cuda' if torch.cuda.is_available() else 'cpu')
+    # import torch
+    # inputs = tokenizer(prompt, return_tensors="pt").to('cuda' if torch.cuda.is_available() else 'cpu')
+    inputs = tokenizer(prompt, return_tensors="pt")
 
     g_st = time.time()
     output = model.generate(

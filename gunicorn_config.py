@@ -14,8 +14,10 @@ bind = os.environ.get('GUNICORN_BIND', '127.0.0.1:8000')
 # 100MB = 100 * 1024 * 1024 = 104857600 bytes
 max_request_size = 104857600
 
-# accesslog = "./logs/access.log"
-# errorlog = "./logs/error.log"
+capture_output = True
+
+accesslog = "./logs/access.log"
+errorlog = "./logs/error.log"
 loglevel = "info"
 
 forwarded_allow_ips = '*'

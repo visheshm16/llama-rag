@@ -1,0 +1,15 @@
+[Unit]
+Description=RAG Application
+After=network.target
+
+[Service]
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/llama-rag
+ExecStart=/bin/bash -c 'source /home/ubuntu/llama-rag/venv/bin/activate && gunicorn --config gunicorn_config.py app:app'
+Restart=always
+RestartSec=10
+Environment=PATH=/home/ubuntu/llama-rag/venv/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=multi-user.target
