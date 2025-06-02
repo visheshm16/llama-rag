@@ -24,7 +24,7 @@ sudo apt install -y docker-compose-plugin
 wget -O docker-compose.yml https://github.com/milvus-io/milvus/releases/download/v2.5.6/milvus-standalone-docker-compose.yml
 
 # Run Milvus
-docker compose up -d >> milvus_compose.log 2>&1
+sudo docker compose up -d >> milvus_compose.log 2>&1
 
 # Show running containers
-docker ps
+sudo docker ps
