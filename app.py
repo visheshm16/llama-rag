@@ -5,6 +5,7 @@ import time
 from dotenv import load_dotenv
 load_dotenv()
 import os
+import re
 
 # --- Config ---
 COLLECTION_NAME = os.getenv("MILVUS_COLLECTION", "default_collection")
@@ -187,7 +188,7 @@ def fetch_response():
         return jsonify({"error": "System not fully initialized. Please try again."}), 503
     
     r_st = time.time()
-    relevant_docs = vector_store.similarity_search(query, k=5)
+    relevant_docs = vector_store.similarity_search(query, k=3)
     r_time = time.time() - r_st
 
     print(f"Retrieval time: {r_time}, {len(relevant_docs)} docs fetched.")
@@ -205,6 +206,7 @@ def fetch_response():
     prompt = f"""<|system|>
 You are a helpful question answering chatbot. You will use the given context to answer user queries, if the given context does not help in answering user's query then let the user know that you are not able to answer their query.
 You may hold basic conversation with the user and interact with them, use context when they have a query.
+# ALWAYS format your responses with HTML tags (p, b, ul) as it should be visible on a webpage.
 
 {context}
 
@@ -222,9 +224,9 @@ You may hold basic conversation with the user and interact with them, use contex
     output = model.generate(
         **inputs,
         max_new_tokens=512,
-        temperature=0.4,      # Lower for more consistency
-        top_p=0.95,          # Slightly higher for quality
-        # do_sample=True,
+        temperature=0.3,      # Lower for more consistency
+        top_p=0.9,          # Slightly higher for quality
+        do_sample=True,
         pad_token_id=tokenizer.eos_token_id
     )
     response = tokenizer.decode(output[0], skip_special_tokens=True)
@@ -242,6 +244,9 @@ You may hold basic conversation with the user and interact with them, use contex
         final_response += response
 
     final_response +=  f"<p><b>Generation time {g_time} s.</b></p>"
+
+    # final_response = re.sub(r'<\|[^|]*\|>', '', final_response)
+    # final_response = re.sub(r'<\|reserved_special_token_\d+\|>', '', final_response)
 
     print("\n\nGenerated response:\n",final_response)
     
