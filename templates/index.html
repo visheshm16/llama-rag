@@ -19,7 +19,10 @@
             box-shadow: 0 20px 40px rgba(0,0,0,0.1);
             overflow: hidden;
             margin: 20px auto;
-            max-width: 85%;
+            max-width: 95%;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #d4d8d0;
         }
         
         .header {
@@ -35,7 +38,7 @@
         }
         
         .logo {
-            height: 50px;
+            height: 65px;
             width: auto;
         }
         
@@ -58,28 +61,33 @@
         }
         
         .about-link:hover {
-            background: rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.28);
             transform: translateY(-2px);
         }
         
         .main-content {
-            padding: 30px;
             display: flex;
-            gap: 30px;
+            flex-direction: column;
+            flex: 1;
             min-height: 700px;
         }
         
-        .input-section {
+        .chat-section {
             flex: 1;
-            max-width: 400px;
+            padding: 30px 30px 0 30px;
+            display: flex;
+            flex-direction: column;
         }
         
-        .chat-section {
-            flex: 2;
+        .input-section {
+            padding: 0 30px 30px 30px;
+            border-top: 1px solid #d4d8d0;
+            background: linear-gradient(180deg, #f7f8f5 0%, #f3f5f0 100%);
         }
         
         .input-container {
-            margin-bottom: 20px;
+            margin-bottom: 10px;
+            margin-top: 10px;
         }
         
         .form-label {
@@ -93,6 +101,7 @@
             border-radius: 10px;
             transition: all 0.3s ease;
             font-size: 1rem;
+            background: #ffffff;
         }
         
         .form-control:focus {
@@ -103,6 +112,7 @@
         .button-group {
             display: flex;
             gap: 15px;
+            margin-bottom: 15px;
         }
         
         .btn {
@@ -142,9 +152,10 @@
             background: #e7e7e7;
             border-radius: 15px;
             padding: 20px;
-            height: 90%;
+            flex: 1;
             overflow-y: auto;
-            border: 1px solid #e9ecef;
+            border: 1px solid #d4d8d0;
+            margin-bottom: 20px;
         }
         
         .message {
@@ -240,13 +251,12 @@
         }
         
         @media (max-width: 768px) {
-            .main-content {
-                flex-direction: column;
+            .input-section {
                 padding: 20px;
             }
             
-            .input-section {
-                max-width: none;
+            .chat-section {
+                padding: 20px 20px 0 20px;
             }
             
             .header-title {
@@ -281,6 +291,20 @@
         </div>
         
         <div class="main-content">
+            <div class="chat-section">
+                <h5 class="mb-3">
+                    <i class="fas fa-comments me-2"></i>Conversation History
+                </h5>
+                <div class="chat-box" id="modelresponse">
+                    <div class="message bot-message">
+                        <div class="message-header">
+                            <i class="fas fa-robot me-2"></i>Info-Fetcher
+                        </div>
+                        <div class="message-content">Hello! How can I help you today? Ask me anything about your uploaded documents.</div>
+                    </div>
+                </div>
+            </div>
+            
             <div class="input-section">
                 <div class="input-container">
                     <label for="userinput" class="form-label h5">
@@ -305,24 +329,10 @@
                     </button>
                 </div>
                 
-                <div class="mt-4">
+                <div>
                     <a href="/uploaddocument" class="btn btn-outline-primary w-100">
                         <i class="fas fa-upload me-2"></i>Upload Documents
                     </a>
-                </div>
-            </div>
-            
-            <div class="chat-section">
-                <h5 class="mb-3">
-                    <i class="fas fa-comments me-2"></i>Conversation History
-                </h5>
-                <div class="chat-box" id="modelresponse">
-                    <div class="message bot-message">
-                        <div class="message-header">
-                            <i class="fas fa-robot me-2"></i>Info-Fetcher
-                        </div>
-                        Hello! How can I help you today? Ask me anything about your uploaded documents.
-                    </div>
                 </div>
             </div>
         </div>
@@ -334,6 +344,72 @@
     <script>
         $(document).ready(function() {
             let isProcessing = false;
+            let chatHistory = [];
+            
+            // Cookie utility functions
+            function setCookie(name, value, days = 7) {
+                const expires = new Date();
+                expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+                const expiresStr = expires.toUTCString();
+                document.cookie = `${name}=${encodeURIComponent(value)};expires=${expiresStr};path=/;SameSite=Lax`;
+            }
+            
+            function getCookie(name) {
+                const nameEQ = name + "=";
+                const ca = document.cookie.split(';');
+                for (let i = 0; i < ca.length; i++) {
+                    let c = ca[i];
+                    while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+                    if (c.indexOf(nameEQ) === 0) {
+                        return decodeURIComponent(c.substring(nameEQ.length, c.length));
+                    }
+                }
+                return null;
+            }
+            
+            function deleteCookie(name) {
+                document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;`;
+            }
+            
+            function saveChatHistory() {
+                try {
+                    // Limit to last 50 messages to avoid cookie size limits (cookies have ~4KB limit)
+                    const limitedHistory = chatHistory.slice(-50);
+                    const historyJson = JSON.stringify(limitedHistory);
+                    
+                    // Check if the data is too large for cookies (~4KB limit)
+                    if (historyJson.length > 3500) {
+                        // If too large, keep only the last 25 messages
+                        const shorterHistory = chatHistory.slice(-25);
+                        setCookie('chatHistory', JSON.stringify(shorterHistory), 7);
+                    } else {
+                        setCookie('chatHistory', historyJson, 7);
+                    }
+                } catch (error) {
+                    console.warn('Failed to save chat history to cookies:', error);
+                }
+            }
+            
+            function loadChatHistoryFromCookie() {
+                try {
+                    const historyJson = getCookie('chatHistory');
+                    if (historyJson) {
+                        const parsedHistory = JSON.parse(historyJson);
+                        if (Array.isArray(parsedHistory) && parsedHistory.length > 0) {
+                            chatHistory = parsedHistory;
+                            return true;
+                        }
+                    }
+                } catch (error) {
+                    console.warn('Failed to load chat history from cookies:', error);
+                    // Clear corrupted cookie
+                    deleteCookie('chatHistory');
+                }
+                return false;
+            }
+            
+            // Initialize chat history on page load
+            loadChatHistory();
             
             // Character counter
             $('#userinput').on('input', function() {
@@ -371,6 +447,75 @@
                 clearChat();
             });
             
+            function loadChatHistory() {
+                // Try to load chat history from cookies first
+                const historyLoaded = loadChatHistoryFromCookie();
+                
+                if (historyLoaded && chatHistory.length > 0) {
+                    // If history exists in cookies, clear the default welcome message and load from cookies
+                    $('#modelresponse').empty();
+                    renderChatHistory();
+                } else {
+                    // If no history in cookies, keep the default HTML welcome message and sync it to cache
+                    const welcomeMessage = {
+                        sender: 'bot',
+                        content: 'Hello! How can I help you today? Ask me anything about your uploaded documents.',
+                        timestamp: new Date().toISOString(),
+                        isError: false
+                    };
+                    chatHistory = [welcomeMessage];
+                    saveChatHistory();
+                    // Don't re-render since the welcome message is already in the HTML
+                }
+            }
+            
+            function renderChatHistory() {
+                $('#modelresponse').empty();
+                
+                chatHistory.forEach(function(message) {
+                    renderMessage(message.sender, message.content, message.timestamp, message.isError);
+                });
+                
+                scrollToBottom();
+            }
+            
+            function renderMessage(sender, content, timestamp, isError = false) {
+                const messageTime = new Date(timestamp).toLocaleTimeString();
+                const messageClass = sender === 'user' ? 'user-message' : 'bot-message';
+                const icon = sender === 'user' ? 'fas fa-user' : 'fas fa-robot';
+                const senderName = sender === 'user' ? 'You' : 'Info-Fetcher';
+                
+                let messageHtml = `
+                    <div class="message ${messageClass}">
+                        <div class="message-header">
+                            <i class="${icon} me-2"></i>${senderName}
+                            <small class="ms-2 opacity-75">${messageTime}</small>
+                        </div>
+                        <div class="message-content">${content}</div>
+                    </div>
+                `;
+                
+                if (isError) {
+                    messageHtml = messageHtml.replace('bot-message', 'bot-message border-danger');
+                }
+                
+                $('#modelresponse').append(messageHtml);
+            }
+            
+            function addMessageToHistory(sender, content, isError = false) {
+                const message = {
+                    sender: sender,
+                    content: content,
+                    timestamp: new Date().toISOString(),
+                    isError: isError
+                };
+                
+                chatHistory.push(message);
+                
+                // Save to cookies after adding new message
+                saveChatHistory();
+            }
+            
             function sendMessage() {
                 if (isProcessing) return;
                 
@@ -380,7 +525,8 @@
                     return;
                 }
                 
-                // Add user message to chat
+                // Add user message to chat and cache
+                addMessageToHistory('user', userInput);
                 appendMessage('user', userInput);
                 
                 // Clear input and reset height
@@ -402,6 +548,9 @@
                     success: function(response) {
                         hideTypingIndicator();
                         const botResponse = response.message || 'I received your question but couldn\'t generate a proper response.';
+                        
+                        // Add bot response to cache and display
+                        addMessageToHistory('bot', botResponse, false);
                         appendMessage('bot', botResponse);
                     },
                     error: function(xhr) {
@@ -415,6 +564,8 @@
                             // Use default error message
                         }
                         
+                        // Add error response to cache and display
+                        addMessageToHistory('bot', errorMessage, true);
                         appendMessage('bot', errorMessage, true);
                     },
                     complete: function() {
@@ -471,14 +622,27 @@
             }
             
             function clearChat() {
-                $('#modelresponse').html(`
-                    <div class="message bot-message">
-                        <div class="message-header">
-                            <i class="fas fa-robot me-2"></i>Info-Fetcher
-                        </div>
-                        Hello! How can I help you today? Ask me anything about your uploaded documents.
-                    </div>
-                `);
+                // Clear the chat history cache completely
+                chatHistory = [];
+                
+                // Delete the chat history cookie
+                deleteCookie('chatHistory');
+                
+                // Add fresh welcome message to cache
+                const welcomeMessage = {
+                    sender: 'bot',
+                    content: 'Hello! How can I help you today? Ask me anything about your uploaded documents.',
+                    timestamp: new Date().toISOString(),
+                    isError: false
+                };
+                chatHistory.push(welcomeMessage);
+                
+                // Save the new state to cookies
+                saveChatHistory();
+                
+                // Clear and reload the display
+                $('#modelresponse').empty();
+                renderChatHistory();
             }
             
             function setFormState(enabled) {
