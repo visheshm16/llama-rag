@@ -189,7 +189,7 @@ def fetch_response():
         return jsonify({"error": "System not fully initialized. Please try again."}), 503
     
     r_st = time.time()
-    relevant_docs = vector_store.similarity_search(query, k=k)
+    relevant_docs = vector_store.similarity_search(query, k=5)
     r_time = time.time() - r_st
 
     print(f"Retrieval time: {r_time}, {len(relevant_docs)} docs fetched.")
