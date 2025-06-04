@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 import os
 import re
+import torch
 
 # --- Config ---
 COLLECTION_NAME = os.getenv("MILVUS_COLLECTION", "default_collection")
@@ -37,7 +38,7 @@ def initialize_models():
     from pymilvus import connections, Collection, CollectionSchema, FieldSchema, DataType, utility
     from langchain_huggingface import HuggingFaceEmbeddings
     from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM
-    import torch
+    
 
     print("Done ✅")
     print("Using CUDA" if torch.cuda.is_available() else "CUDA not found, using CPU")
@@ -101,7 +102,7 @@ def initialize_models():
     # Load tokenizer and model separately
     tokenizer = AutoTokenizer.from_pretrained('huggingface_model', local_files_only=True)
     print("Loaded tokenizer ✅")
-    model = AutoModelForCausalLM.from_pretrained('huggingface_model', torch_dtype=torch.bfloat16, device_map="auto", local_files_only=True)
+    model = AutoModelForCausalLM.from_pretrained('huggingface_model', torch_dtype=torch.bfloat16, device_map="cuda" if torch.cuda.is_available() else "cpu", local_files_only=True)
     print("Model loaded ✅")
 
     # pipe = pipeline(
@@ -188,7 +189,7 @@ def fetch_response():
         return jsonify({"error": "System not fully initialized. Please try again."}), 503
     
     r_st = time.time()
-    relevant_docs = vector_store.similarity_search(query, k=3)
+    relevant_docs = vector_store.similarity_search(query, k=k)
     r_time = time.time() - r_st
 
     print(f"Retrieval time: {r_time}, {len(relevant_docs)} docs fetched.")
@@ -217,8 +218,8 @@ You may hold basic conversation with the user and interact with them, use contex
 """
     
     # import torch
-    # inputs = tokenizer(prompt, return_tensors="pt").to('cuda' if torch.cuda.is_available() else 'cpu')
-    inputs = tokenizer(prompt, return_tensors="pt")
+    inputs = tokenizer(prompt, return_tensors="pt").to('cuda' if torch.cuda.is_available() else 'cpu')
+    # inputs = tokenizer(prompt, return_tensors="pt")
 
     g_st = time.time()
     output = model.generate(
