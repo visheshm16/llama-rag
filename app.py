@@ -103,7 +103,7 @@ def initialize_models():
     # Load tokenizer and model separately
     tokenizer = AutoTokenizer.from_pretrained('huggingface_model', local_files_only=True)
     print("Loaded tokenizer ✅")
-    model = AutoModelForCausalLM.from_pretrained('huggingface_model', torch_dtype=torch.bfloat16, device_map="cuda" if torch.cuda.is_available() else "cpu", local_files_only=True)
+    model = AutoModelForCausalLM.from_pretrained('huggingface_model', torch_dtype=torch.float16, device_map="auto", local_files_only=True)
     print("Model loaded ✅")
 
     # pipe = pipeline(

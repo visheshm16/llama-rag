@@ -7,7 +7,7 @@ from huggingface_hub import login, snapshot_download
 login(token=os.getenv('HF_TOKEN'))
 
 
-lm_model_id = "meta-llama/Llama-3.2-1B-Instruct"
+lm_model_id = "meta-llama/Llama-3.1-8B-Instruct"
 embedding_model_id = "sentence-transformers/all-MiniLM-L6-v2"
 
 # -----------------------------------------------------------------------------------------------
