@@ -7,6 +7,7 @@ load_dotenv()
 import os
 import re
 import torch
+from collections import defaultdict
 
 # --- Config ---
 COLLECTION_NAME = os.getenv("MILVUS_COLLECTION", "default_collection")
@@ -189,10 +190,12 @@ def fetch_response():
         return jsonify({"error": "System not fully initialized. Please try again."}), 503
     
     r_st = time.time()
-    relevant_docs = vector_store.similarity_search(query, k=5)
+    relevant_docs = vector_store.similarity_search(query, k=4)
     r_time = time.time() - r_st
 
     print(f"Retrieval time: {r_time}, {len(relevant_docs)} docs fetched.")
+
+    retrieval_info = defaultdict(list)
 
     context = "### Relevant Context:\n"
     if not relevant_docs:
@@ -200,7 +203,9 @@ def fetch_response():
 
     for idx, doc in enumerate(relevant_docs):
         # print(doc)
-        context += f"{idx}:\n{doc.page_content} (Source: {doc.metadata.get('filename', 'unknown')}, Page: {doc.metadata.get('page', 'unknown')})\n"
+        context += f"{idx}:\n{doc.page_content}\n"
+
+        retrieval_info[doc.metadata.get('filename', 'unknown')].append(str(doc.metadata.get('page', 'unknown')))
     
     context += "### End of Context\n"
 
@@ -218,15 +223,20 @@ You may hold basic conversation with the user and interact with them, use contex
 """
     
     # import torch
-    inputs = tokenizer(prompt, return_tensors="pt").to('cuda' if torch.cuda.is_available() else 'cpu')
+    print("Tokenizing input string")
+    if torch.cuda.is_available():
+        inputs = tokenizer(prompt, return_tensors="pt").to('cuda')
+    else:
+        inputs = tokenizer(prompt, return_tensors="pt")
     # inputs = tokenizer(prompt, return_tensors="pt")
 
+    print("Starting generation...")
     g_st = time.time()
     output = model.generate(
         **inputs,
         max_new_tokens=512,
-        temperature=0.3,      # Lower for more consistency
-        top_p=0.9,          # Slightly higher for quality
+        temperature=0.25,      # Lower for more consistency
+        top_p=0.95,          # Slightly higher for quality
         do_sample=True,
         pad_token_id=tokenizer.eos_token_id
     )
@@ -248,6 +258,10 @@ You may hold basic conversation with the user and interact with them, use contex
 
     # final_response = re.sub(r'<\|[^|]*\|>', '', final_response)
     # final_response = re.sub(r'<\|reserved_special_token_\d+\|>', '', final_response)
+
+    final_response +=  "<p><b>Sources:</b></p>"
+    for filename in retrieval_info.keys():
+        final_response += f"<p>File: {filename}, Pages: {', '.join(retrieval_info[filename])}</p>"
 
     print("\n\nGenerated response:\n",final_response)
     
