@@ -16,8 +16,19 @@ MILVUS_HOST = os.getenv("MILVUS_HOST", "127.0.0.1")
 MILVUS_PORT = os.getenv("MILVUS_PORT", "19530")
 NUM_DOCS = int(os.getenv("NUM_DOCS", 8))
 GENERATION_LENGTH = 512
+TEMPERATURE = 0.2
+TOP_P = 0.95
+CHUNK_CHARACTER_SIZE = 1500
+CHUNK_OVERLAP = 150
 # EMBEDDING_DIM = 384  # Value for sentence-transformers/all-MiniLM-L6-v2
 EMBEDDING_DIM = 768  # Value for sentence-transformers/all-mpnet-base-v2
+
+# Index parameters for Milvus
+index_params = {
+    "index_type": "IVF_FLAT",
+    "metric_type": "COSINE",
+    "params": {"nlist": 128}
+}
 
 # Initialize global variables
 text_splitter = None
@@ -34,6 +45,7 @@ def initialize_models():
     global text_splitter, vector_store, tokenizer, model, embeddings, pipe, retriever
     
     if text_splitter is not None:  # Already initialized
+        print("# INITIALIZATION ALREADY DONE #")
         return
     
     print("Starting library imports...")
@@ -49,19 +61,12 @@ def initialize_models():
     print("Done ✅")
     print("Using CUDA" if torch.cuda.is_available() else "CUDA not found, using CPU")
 
-    # Index parameters for Milvus
-    index_params = {
-        "index_type": "IVF_FLAT",
-        "metric_type": "COSINE",
-        "params": {"nlist": 128}
-    }
-
     # --- Load Embedding Model ---
     embeddings = HuggingFaceEmbeddings(model_name='./huggingface_embedder')
     print("Embedding model loaded ✅")
 
     # --- Define Text Splitter ---
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=900, chunk_overlap=100, separators=["\n\n", "\n", ". "], length_function=len)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_CHARACTER_SIZE, chunk_overlap=CHUNK_OVERLAP, separators=["\n\n", "\n", ". "], length_function=len)
 
     # --- Connect to Milvus ---
     connections.connect(
@@ -216,11 +221,13 @@ def fetch_response():
 
     for idx, doc in enumerate(relevant_docs):
         # print(doc)
-        context += f"{idx}:\n{doc.page_content}\n"
+        context += f"{idx}:\n{doc.page_content}\n(SOURCE: {doc.metadata.get('filename', 'unknown')}, {doc.metadata.get('page', 'unknown')})\n\n"
 
         retrieval_info[doc.metadata.get('filename', 'unknown')].append(str(doc.metadata.get('page', 'unknown')))
     
     context += "### End of Context\n"
+
+    print(context)
 
     sys_prompt = """You are a helpful question answering chatbot. You will use the given context to answer user queries in concise manner.
 If the given context does not help in answering user's query then let the user know that you are not able to answer their query.
@@ -251,7 +258,7 @@ ALways format your responses using html tags (<p>, <b>, <ul>, <li>). Do NOT use 
     #     pad_token_id=tokenizer.eos_token_id
     # )
     # response = tokenizer.decode(output[0], skip_special_tokens=True)
-    output = pipe(messages, max_length=GENERATION_LENGTH, do_sample=True, temperature=0.2, top_p=0.95)
+    output = pipe(messages, max_length=GENERATION_LENGTH, do_sample=True, temperature=TEMPERATURE, top_p=TOP_P)
     response = output[0]['generated_text'][-1]['content']
     g_time = time.time() - g_st
     # breakpoint()
