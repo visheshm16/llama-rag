@@ -8,11 +8,13 @@ import os
 import re
 import torch
 from collections import defaultdict
+import markdown
 
 # --- Config ---
 COLLECTION_NAME = os.getenv("MILVUS_COLLECTION", "default_collection")
 MILVUS_HOST = os.getenv("MILVUS_HOST", "127.0.0.1")
 MILVUS_PORT = os.getenv("MILVUS_PORT", "19530")
+NUM_DOCS = int(os.getenv("NUM_DOCS", 5))
 EMBEDDING_DIM = 384  # Value for sentence-transformers/all-MiniLM-L6-v2
 
 # Initialize global variables
@@ -22,11 +24,12 @@ tokenizer = None
 model = None
 embeddings = None
 pipe = None
+retriever = None
 
 # if __name__ == '__main__' or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
 def initialize_models():
     """Initialize all models and components"""
-    global text_splitter, vector_store, tokenizer, model, embeddings, pipe
+    global text_splitter, vector_store, tokenizer, model, embeddings, pipe, retriever
     
     if text_splitter is not None:  # Already initialized
         return
@@ -56,7 +59,7 @@ def initialize_models():
     print("Embedding model loaded ✅")
 
     # --- Define Text Splitter ---
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1024, chunk_overlap=200)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=900, chunk_overlap=100, separators=["\n\n", "\n", ". "], length_function=len)
 
     # --- Connect to Milvus ---
     connections.connect(
@@ -100,18 +103,25 @@ def initialize_models():
     )
     print("Milvus VectorStore is ready ✅")
 
+    # Maximum Marginal Relevance (MMR) - reduces redundancy
+    retriever = vector_store.as_retriever(
+        search_type="mmr",
+        search_kwargs={"k": NUM_DOCS, "fetch_k": 12, "lambda_mult": 0.85}
+    )
+    print("Retriever is ready ✅")
+
     # Load tokenizer and model separately
     tokenizer = AutoTokenizer.from_pretrained('huggingface_model', local_files_only=True)
     print("Loaded tokenizer ✅")
-    model = AutoModelForCausalLM.from_pretrained('huggingface_model', torch_dtype=torch.float16, device_map="auto", local_files_only=True)
+    model = AutoModelForCausalLM.from_pretrained('huggingface_model', torch_dtype=torch.bfloat16, device_map="auto", local_files_only=True)
     print("Model loaded ✅")
 
-    # pipe = pipeline(
-    #     "text-generation",
-    #     model=model,
-    #     tokenizer=tokenizer,
-    # )
-    # print("Pipeline created ✅")
+    pipe = pipeline(
+        "text-generation",
+        model=model,
+        tokenizer=tokenizer,
+    )
+    print("Pipeline created ✅")
 
 # Initialize models when module is imported (works with both Flask dev server and Gunicorn)
 initialize_models()
@@ -190,7 +200,8 @@ def fetch_response():
         return jsonify({"error": "System not fully initialized. Please try again."}), 503
     
     r_st = time.time()
-    relevant_docs = vector_store.similarity_search(query, k=4)
+    # relevant_docs = vector_store.similarity_search(query, k=NUM_DOCS)
+    relevant_docs = retriever.invoke(query)
     r_time = time.time() - r_st
 
     print(f"Retrieval time: {r_time}, {len(relevant_docs)} docs fetched.")
@@ -209,39 +220,39 @@ def fetch_response():
     
     context += "### End of Context\n"
 
-    prompt = f"""<|system|>
-You are a helpful question answering chatbot. You will use the given context to answer user queries, if the given context does not help in answering user's query then let the user know that you are not able to answer their query.
-You may hold basic conversation with the user and interact with them, use context when they have a query.
-# ALWAYS format your responses with HTML tags (p, b, ul) as it should be visible on a webpage.
-
-{context}
-
-<|user|>
-{query}
-
-<|assistant|>
-"""
+    sys_prompt = """You are a helpful question answering chatbot. You will use the given context to answer user queries in concise manner.
+If the given context does not help in answering user's query then let the user know that you are not able to answer their query.
+Interact with user in short responses unless asked to elaborate, use context when they have a query, but do not answer question if not present in given context.
+ALways format your responses using html tags (<p>, <b>, <ul>, <li>). Do NOT use markdown formatting."""
+ 
+    messages = [
+        {"role": "system", "content": sys_prompt},
+        {"role": "system", "content": context},
+        {"role": "user", "content": query},
+    ]
     
     # import torch
-    print("Tokenizing input string")
-    if torch.cuda.is_available():
-        inputs = tokenizer(prompt, return_tensors="pt").to('cuda')
-    else:
-        inputs = tokenizer(prompt, return_tensors="pt")
-    # inputs = tokenizer(prompt, return_tensors="pt")
+    # print("Tokenizing input string")
+    # if torch.cuda.is_available():
+    #     inputs = tokenizer(prompt, return_tensors="pt").to('cuda')
+    # else:
+    #     inputs = tokenizer(prompt, return_tensors="pt")
 
     print("Starting generation...")
     g_st = time.time()
-    output = model.generate(
-        **inputs,
-        max_new_tokens=512,
-        temperature=0.25,      # Lower for more consistency
-        top_p=0.95,          # Slightly higher for quality
-        do_sample=True,
-        pad_token_id=tokenizer.eos_token_id
-    )
-    response = tokenizer.decode(output[0], skip_special_tokens=True)
+    # output = model.generate(
+    #     **inputs,
+    #     max_new_tokens=512,
+    #     temperature=0.25,      # Lower for more consistency
+    #     top_p=0.95,          # Slightly higher for quality
+    #     do_sample=True,
+    #     pad_token_id=tokenizer.eos_token_id
+    # )
+    # response = tokenizer.decode(output[0], skip_special_tokens=True)
+    output = pipe(messages, max_length=512, do_sample=True, temperature=0.2, top_p=0.95)
+    response = output[0]['generated_text'][-1]['content']
     g_time = time.time() - g_st
+    # breakpoint()
 
     print("Response created, took "+str(g_time)+" seconds.")
     
@@ -250,14 +261,16 @@ You may hold basic conversation with the user and interact with them, use contex
     response_parts = response.split("<|assistant|>")
     final_response = f"<p><b>Retrieval time {r_time} s.</b></p>"
     if len(response_parts) > 1:
+        # final_response += markdown.markdown(response_parts[1].strip())
         final_response += response_parts[1].strip()
     else:
+        # final_response += markdown.markdown(response)
         final_response += response
 
     final_response +=  f"<p><b>Generation time {g_time} s.</b></p>"
 
-    # final_response = re.sub(r'<\|[^|]*\|>', '', final_response)
-    # final_response = re.sub(r'<\|reserved_special_token_\d+\|>', '', final_response)
+    final_response = re.sub(r'<\|[^|]*\|>', '', final_response)
+    final_response = re.sub(r'<\|reserved_special_token_\d+\|>', '', final_response)
 
     final_response +=  "<p><b>Sources:</b></p>"
     for filename in retrieval_info.keys():

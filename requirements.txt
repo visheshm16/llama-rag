@@ -14,3 +14,4 @@ flask
 flask-cors
 PyPDF2
 gunicorn
+markdown
