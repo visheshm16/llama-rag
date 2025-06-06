@@ -14,8 +14,10 @@ import markdown
 COLLECTION_NAME = os.getenv("MILVUS_COLLECTION", "default_collection")
 MILVUS_HOST = os.getenv("MILVUS_HOST", "127.0.0.1")
 MILVUS_PORT = os.getenv("MILVUS_PORT", "19530")
-NUM_DOCS = int(os.getenv("NUM_DOCS", 5))
-EMBEDDING_DIM = 384  # Value for sentence-transformers/all-MiniLM-L6-v2
+NUM_DOCS = int(os.getenv("NUM_DOCS", 8))
+GENERATION_LENGTH = 512
+# EMBEDDING_DIM = 384  # Value for sentence-transformers/all-MiniLM-L6-v2
+EMBEDDING_DIM = 768  # Value for sentence-transformers/all-mpnet-base-v2
 
 # Initialize global variables
 text_splitter = None
@@ -106,7 +108,7 @@ def initialize_models():
     # Maximum Marginal Relevance (MMR) - reduces redundancy
     retriever = vector_store.as_retriever(
         search_type="mmr",
-        search_kwargs={"k": NUM_DOCS, "fetch_k": 12, "lambda_mult": 0.85}
+        search_kwargs={"k": NUM_DOCS, "fetch_k": 20, "lambda_mult": 0.65}
     )
     print("Retriever is ready ✅")
 
@@ -249,7 +251,7 @@ ALways format your responses using html tags (<p>, <b>, <ul>, <li>). Do NOT use 
     #     pad_token_id=tokenizer.eos_token_id
     # )
     # response = tokenizer.decode(output[0], skip_special_tokens=True)
-    output = pipe(messages, max_length=512, do_sample=True, temperature=0.2, top_p=0.95)
+    output = pipe(messages, max_length=GENERATION_LENGTH, do_sample=True, temperature=0.2, top_p=0.95)
     response = output[0]['generated_text'][-1]['content']
     g_time = time.time() - g_st
     # breakpoint()

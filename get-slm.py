@@ -8,7 +8,7 @@ login(token=os.getenv('HF_TOKEN'))
 
 
 lm_model_id = "meta-llama/Llama-3.1-8B-Instruct"
-embedding_model_id = "sentence-transformers/all-MiniLM-L6-v2"
+embedding_model_id = "sentence-transformers/all-mpnet-base-v2"
 
 # -----------------------------------------------------------------------------------------------
 
