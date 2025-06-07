@@ -18,8 +18,8 @@ NUM_DOCS = int(os.getenv("NUM_DOCS", 8))
 GENERATION_LENGTH = 512
 TEMPERATURE = 0.2
 TOP_P = 0.95
-CHUNK_CHARACTER_SIZE = 1500
-CHUNK_OVERLAP = 150
+CHUNK_CHARACTER_SIZE = 1500 # MAX 4000
+CHUNK_OVERLAP = int(CHUNK_CHARACTER_SIZE * 0.1) # 10% of chunk size
 # EMBEDDING_DIM = 384  # Value for sentence-transformers/all-MiniLM-L6-v2
 EMBEDDING_DIM = 768  # Value for sentence-transformers/all-mpnet-base-v2
 
@@ -177,6 +177,10 @@ def index_document():
 
         chunks = text_splitter.split_documents(doc_list)
         print(f"Created {len(chunks)} chunk(s).")
+
+        # for ci in range(len(chunks)):
+        #     modified_text = "passage: " + chunks[ci].page_content
+        #     chunks[ci].page_content = modified_text
 
         st = time.time()
         vector_store.add_documents(chunks)
