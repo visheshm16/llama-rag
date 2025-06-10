@@ -221,13 +221,13 @@
             100% { transform: rotate(360deg); }
         }
         
-        .typing-indicator {
+        /* .typing-indicator {
             display: flex;
             align-items: center;
             gap: 5px;
             color: #666;
             font-style: italic;
-        }
+        } */
         
         .typing-dots {
             display: flex;
@@ -540,87 +540,112 @@
                 // Save to cookies after adding new message
                 saveChatHistory();
             }
+
+            function updateTypingMessage(text) {
+                const lastBotMessage = $('.bot-message:last .message-content');
+                if (lastBotMessage.length) {
+                    // Convert text to HTML with proper line breaks and formatting
+                    // const formattedText = text.replace(/\n/g, '<br>');
+                    lastBotMessage.html(text);
+                    scrollToBottom();
+                } else {
+                    appendMessage('bot', text);
+                }
+            }
             
-            function sendMessage() {
+            async function sendMessage() {
                 if (isProcessing) return;
-                
                 const userInput = $('#userinput').val().trim();
                 if (!userInput) {
                     showAlert('warning', 'Please enter a question first.');
                     return;
                 }
-                
-                // Add user message to chat and cache
                 addMessageToHistory('user', userInput);
                 appendMessage('user', userInput);
-                
-                // Clear input and reset height
                 $('#userinput').val('').css('height', 'auto');
                 $('#charCount').text('0');
-                
-                // Show typing indicator
-                showTypingIndicator();
-                
-                // Disable form
                 setFormState(false);
                 
-                // Send AJAX request
-                $.ajax({
-                    url: '/fetchreponse',
-                    type: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify({ query: userInput }),
-                    success: function(response) {
-                        hideTypingIndicator();
-                        const botResponse = response.message || 'I received your question but couldn\'t generate a proper response.';
+                try {
+                    console.log("Sending user input to server: ", userInput);
+                    const response = await fetch('/fetchresponse', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ query: userInput })
+                    });
+                    if (!response.ok) throw new Error("Server error");
+                    
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+                    let botResponse = '';
+                    
+                    // Create initial empty bot message
+                    appendMessage('bot', '');
+                    
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
                         
-                        // Add bot response to cache and display
-                        addMessageToHistory('bot', botResponse, false);
-                        appendMessage('bot', botResponse);
-                    },
-                    error: function(xhr) {
-                        hideTypingIndicator();
-                        let errorMessage = 'Sorry, I encountered an error while processing your request.';
+                        buffer += decoder.decode(value, { stream: true });
+                        const events = buffer.split('\n\n');
+                        buffer = events.pop();  // hold incomplete chunk
                         
-                        try {
-                            const response = JSON.parse(xhr.responseText);
-                            errorMessage = response.error || errorMessage;
-                        } catch (e) {
-                            // Use default error message
+                        for (const event of events) {
+                            if (!event.startsWith("data:")) continue;
+                            const data = event.slice(5).trim();
+                            if (data === "[DONE]") continue;
+                            
+                            // Add space before concatenating if needed
+                            if (botResponse && data && !botResponse.endsWith(' ') && !data.startsWith(' ')) {
+                                // Check if we need to add space (avoid adding space before punctuation)
+                                const punctuationRegex = /^[.,!?;:)}\]]/;
+                                if (!punctuationRegex.test(data)) {
+                                    botResponse += ' ';
+                                }
+                            }
+                            
+                            botResponse += data;
+                            updateTypingMessage(botResponse);
                         }
-                        
-                        // Add error response to cache and display
-                        addMessageToHistory('bot', errorMessage, true);
-                        appendMessage('bot', errorMessage, true);
-                    },
-                    complete: function() {
-                        setFormState(true);
-                        $('#userinput').focus();
                     }
-                });
+                    
+                    addMessageToHistory('bot', botResponse, false);
+                    
+                } catch (err) {
+                    console.error("Error fetching response:", err);
+                    const errorMsg = 'Sorry, an error occurred while fetching response.';
+                    addMessageToHistory('bot', errorMsg, true);
+                    appendMessage('bot', errorMsg, true);
+                } finally {
+                    setFormState(true);
+                    $('#userinput').focus();
+                }
             }
                       
-            function showTypingIndicator() {
-                const typingHtml = `
-                    <div class="message bot-message typing-indicator" id="typing-indicator">
-                        <div class="message-header">
-                            <i class="fas fa-robot me-2"></i>Info-Fetcher
-                        </div>
-                        <div class="typing-dots">
-                            <div class="typing-dot"></div>
-                            <div class="typing-dot"></div>
-                            <div class="typing-dot"></div>
-                        </div>
-                        <span class="ms-2">is typing...</span>
-                    </div>
-                `;
-                $('#modelresponse').append(typingHtml);
-                scrollToBottom();
-            }
+            // function showTypingIndicator() {
+            //     const typingHtml = `
+            //         <div class="message bot-message typing-indicator" id="typing-indicator">
+            //             <div class="message-header">
+            //                 <i class="fas fa-robot me-2"></i>Info-Fetcher
+            //             </div>
+            //             <div class="typing-dots">
+            //                 <div class="typing-dot"></div>
+            //                 <div class="typing-dot"></div>
+            //                 <div class="typing-dot"></div>
+            //             </div>
+            //             <span class="ms-2">is typing...</span>
+            //         </div>
+            //     `;
+            //     $('#modelresponse').append(typingHtml);
+            //     scrollToBottom();
+            // }
             
-            function hideTypingIndicator() {
-                $('#typing-indicator').remove();
-            }
+            // function hideTypingIndicator() {
+            //     $('#typing-indicator').remove();
+            // }
             
             function clearChat() {
                 // Clear the chat history cache completely

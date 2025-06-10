@@ -1,6 +1,8 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for
+from flask import Flask, request, jsonify, render_template, redirect, url_for, Response, stream_with_context
 from flask_cors import CORS
-from io import BytesIO
+from io import BytesIO, StringIO
+from transformers import TextIteratorStreamer
+import threading
 import time
 from dotenv import load_dotenv
 load_dotenv()
@@ -192,7 +194,7 @@ def index_document():
         print(f"Error indexing document: {e}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/fetchreponse', methods=['POST'])
+@app.route('/fetchresponse', methods=['POST'])
 def fetch_response():
     data = request.json
     query = data.get('query', None)
@@ -212,7 +214,8 @@ def fetch_response():
     
     r_st = time.time()
     # relevant_docs = vector_store.similarity_search(query, k=NUM_DOCS)
-    relevant_docs = retriever.invoke(query)
+    relevant_docs = []
+    # relevant_docs = retriever.invoke(query)
     r_time = time.time() - r_st
 
     print(f"Retrieval time: {r_time}, {len(relevant_docs)} docs fetched.")
@@ -231,7 +234,7 @@ def fetch_response():
     
     context += "### End of Context\n"
 
-    print(context)
+    # print(context)
 
     sys_prompt = """You are a helpful question answering chatbot. You will use the given context to answer user queries in concise manner.
 If the given context does not help in answering user's query then let the user know that you are not able to answer their query.
@@ -240,58 +243,39 @@ ALways format your responses using html tags (<p>, <b>, <ul>, <li>). Do NOT use 
  
     messages = [
         {"role": "system", "content": sys_prompt},
-        {"role": "system", "content": context},
+        # {"role": "system", "content": context},
         {"role": "user", "content": query},
     ]
-    
-    # import torch
-    # print("Tokenizing input string")
-    # if torch.cuda.is_available():
-    #     inputs = tokenizer(prompt, return_tensors="pt").to('cuda')
-    # else:
-    #     inputs = tokenizer(prompt, return_tensors="pt")
 
-    print("Starting generation...")
-    g_st = time.time()
-    # output = model.generate(
-    #     **inputs,
-    #     max_new_tokens=512,
-    #     temperature=0.25,      # Lower for more consistency
-    #     top_p=0.95,          # Slightly higher for quality
-    #     do_sample=True,
-    #     pad_token_id=tokenizer.eos_token_id
-    # )
-    # response = tokenizer.decode(output[0], skip_special_tokens=True)
-    output = pipe(messages, max_length=GENERATION_LENGTH, do_sample=True, temperature=TEMPERATURE, top_p=TOP_P)
-    response = output[0]['generated_text'][-1]['content']
-    g_time = time.time() - g_st
-    # breakpoint()
+    def generate_stream():
+        yield f"data: <p><b>Retrieval time {r_time:.2f} s.</b></p><div>\n\n"
+        
+        streamer = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
 
-    print("Response created, took "+str(g_time)+" seconds.")
-    
-    print("\n\nFull reponse:\n",response)
-    # Extract just the assistant's response
-    response_parts = response.split("<|assistant|>")
-    final_response = f"<p><b>Retrieval time {r_time} s.</b></p>"
-    if len(response_parts) > 1:
-        # final_response += markdown.markdown(response_parts[1].strip())
-        final_response += response_parts[1].strip()
-    else:
-        # final_response += markdown.markdown(response)
-        final_response += response
+        def run_model():
+            _ = pipe(
+                messages,
+                max_new_tokens=512,
+                do_sample=True,
+                temperature=0.2,
+                top_p=0.95,
+                streamer=streamer
+            )
 
-    final_response +=  f"<p><b>Generation time {g_time} s.</b></p>"
+        thread = threading.Thread(target=run_model)
+        thread.start()
 
-    final_response = re.sub(r'<\|[^|]*\|>', '', final_response)
-    final_response = re.sub(r'<\|reserved_special_token_\d+\|>', '', final_response)
+        for chunk in streamer:
+            yield f"data: {chunk}\n\n"
 
-    final_response +=  "<p><b>Sources:</b></p>"
-    for filename in retrieval_info.keys():
-        final_response += f"<p>File: {filename}, Pages: {', '.join(retrieval_info[filename])}</p>"
+        # Final sources section
+        sources_text = "</div><p><b>Sources:</b></p>"
+        for filename, pages in retrieval_info.items():
+            sources_text += f"<p>File: {filename}, Pages: {', '.join(pages)}</p>"
+        yield f"data: {sources_text}\n\n"
+        yield "data: [DONE]\n\n"
 
-    print("\n\nGenerated response:\n",final_response)
-    
-    return jsonify({"message": final_response}), 200
+    return Response(generate_stream(), mimetype='text/event-stream')
 
 if __name__ == '__main__':
     app.run(debug=False, host='127.0.0.1', port=8000)
