@@ -302,6 +302,8 @@ def fetch_response():
             assistant_response += chunk
             yield f"data: {chunk}\n\n"
 
+        thread.join()  # Wait for the model generation to complete
+
         # Final sources section
         sources_text = "</div><p><b>Sources:</b></p>"
         for filename, pages in retrieval_info.items():
@@ -310,7 +312,18 @@ def fetch_response():
         yield "data: [DONE]\n\n"
     
     # Return the response as a stream
-    return Response(generate_stream(), mimetype='text/event-stream')
+    # Create response with proper headers for streaming
+    response = Response(
+        generate_stream(), 
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no',  # Disable nginx buffering
+            'Access-Control-Allow-Origin': '*',
+        }
+    )
+    return response
 
 @app.route('/chatclear', methods=['POST'])
 def chat_clear():

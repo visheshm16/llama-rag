@@ -2,9 +2,9 @@ import os
 
 os.makedirs('logs', exist_ok=True)
 
-workers = int(os.environ.get('GUNICORN_PROCESSES', '1'))
+workers = 1
 
-threads = int(os.environ.get('GUNICORN_THREADS', '1'))
+worker_connections = 1000
 
 timeout = int(os.environ.get('GUNICORN_TIMEOUT', '600'))
 
@@ -23,3 +23,9 @@ loglevel = "info"
 forwarded_allow_ips = '*'
 
 secure_scheme_headers = { 'X-Forwarded-Proto': 'https' }
+
+# Disable request buffering for streaming
+# This is important for real-time streaming
+limit_request_line = 0
+limit_request_fields = 100
+limit_request_field_size = 8190
