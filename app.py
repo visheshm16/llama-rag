@@ -16,7 +16,7 @@ import markdown
 COLLECTION_NAME = os.getenv("MILVUS_COLLECTION", "default_collection")
 MILVUS_HOST = os.getenv("MILVUS_HOST", "127.0.0.1")
 MILVUS_PORT = os.getenv("MILVUS_PORT", "19530")
-NUM_DOCS = int(os.getenv("NUM_DOCS", 8))
+NUM_DOCS = int(os.getenv("NUM_DOCS", 5))
 GENERATION_LENGTH = 512
 TEMPERATURE = 0.2
 TOP_P = 0.95
@@ -40,6 +40,16 @@ model = None
 embeddings = None
 pipe = None
 retriever = None
+assistant_response = """"""
+
+sys_prompt = """You are a helpful question answering chatbot. You will use the given context to answer user queries in concise manner.
+If the given context does not help in answering user's query then let the user know that you are not able to answer their query.
+Interact with user in short responses unless asked to elaborate, use context when they have a query, but do not answer question if not present in given context.
+ALways format your responses using html tags (<p>, <b>, <ul>, <li>). Do NOT use markdown formatting."""
+
+messages = [
+    {"role": "system", "content": sys_prompt},
+]
 
 # if __name__ == '__main__' or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
 def initialize_models():
@@ -115,7 +125,7 @@ def initialize_models():
     # Maximum Marginal Relevance (MMR) - reduces redundancy
     retriever = vector_store.as_retriever(
         search_type="mmr",
-        search_kwargs={"k": NUM_DOCS, "fetch_k": 20, "lambda_mult": 0.65}
+        search_kwargs={"k": NUM_DOCS, "fetch_k": 15, "lambda_mult": 0.65}
     )
     print("Retriever is ready ✅")
 
@@ -196,6 +206,7 @@ def index_document():
 
 @app.route('/fetchresponse', methods=['POST'])
 def fetch_response():
+    global messages, assistant_response
     data = request.json
     query = data.get('query', None)
     if not query:
@@ -212,10 +223,16 @@ def fetch_response():
     if vector_store is None or tokenizer is None or model is None:
         return jsonify({"error": "System not fully initialized. Please try again."}), 503
     
+    # append assistant response to messages
+    if len(assistant_response) > 1:
+        print("Previous assistant response: ", assistant_response)
+        messages.append({"role": "assistant", "content": assistant_response})
+        assistant_response = """"""
+    
     r_st = time.time()
     # relevant_docs = vector_store.similarity_search(query, k=NUM_DOCS)
-    relevant_docs = []
-    # relevant_docs = retriever.invoke(query)
+    # relevant_docs = []
+    relevant_docs = retriever.invoke(query)
     r_time = time.time() - r_st
 
     print(f"Retrieval time: {r_time}, {len(relevant_docs)} docs fetched.")
@@ -235,19 +252,21 @@ def fetch_response():
     context += "### End of Context\n"
 
     # print(context)
-
-    sys_prompt = """You are a helpful question answering chatbot. You will use the given context to answer user queries in concise manner.
-If the given context does not help in answering user's query then let the user know that you are not able to answer their query.
-Interact with user in short responses unless asked to elaborate, use context when they have a query, but do not answer question if not present in given context.
-ALways format your responses using html tags (<p>, <b>, <ul>, <li>). Do NOT use markdown formatting."""
  
-    messages = [
-        {"role": "system", "content": sys_prompt},
-        # {"role": "system", "content": context},
+    msg_list = [
+        {"role": "user", "content": context},
         {"role": "user", "content": query},
     ]
 
+    messages.extend(msg_list)
+
+    print("Messages prepared for model input. Length:", len(messages))
+    print("Generating response...")
+
+    
+
     def generate_stream():
+        # assistant_response += f"<p><b>Retrieval time: {r_time:.2f} s.</b></p>\n\n"
         yield f"data: <p><b>Retrieval time {r_time:.2f} s.</b></p><div>\n\n"
         
         streamer = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
@@ -266,6 +285,7 @@ ALways format your responses using html tags (<p>, <b>, <ul>, <li>). Do NOT use 
         thread.start()
 
         for chunk in streamer:
+            assistant_response += chunk
             yield f"data: {chunk}\n\n"
 
         # Final sources section
@@ -274,8 +294,18 @@ ALways format your responses using html tags (<p>, <b>, <ul>, <li>). Do NOT use 
             sources_text += f"<p>File: {filename}, Pages: {', '.join(pages)}</p>"
         yield f"data: {sources_text}\n\n"
         yield "data: [DONE]\n\n"
-
+    
+    # Return the response as a stream
     return Response(generate_stream(), mimetype='text/event-stream')
+
+@app.route('/chatclear', methods=['POST'])
+def chat_clear():
+    global messages, assistant_response
+    messages = [
+        {"role": "system", "content": sys_prompt},
+    ]
+    assistant_response = """"""
+    return jsonify({"message": "Chat cleared successfully"}), 200
 
 if __name__ == '__main__':
     app.run(debug=False, host='127.0.0.1', port=8000)

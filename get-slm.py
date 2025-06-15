@@ -12,7 +12,7 @@ embedding_model_id = "sentence-transformers/all-mpnet-base-v2"
 # embedding_model_id="intfloat/e5-base-v2"
 
 # -----------------------------------------------------------------------------------------------
-
+print(f"### Starting download of {lm_model_id}...")
 st = time.time()
 model_path = snapshot_download(
     repo_id=lm_model_id,
@@ -25,7 +25,7 @@ print("Model downloaded to:", model_path)
 
 # -----------------------------------------------------------------------------------------------
 
-print(f"Starting download of {embedding_model_id}...")
+print(f"### Starting download of {embedding_model_id}...")
 st = time.time()
 model_path = snapshot_download(
     repo_id=embedding_model_id,
