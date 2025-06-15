@@ -1,7 +1,8 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for, Response, stream_with_context
+from flask import Flask, request, jsonify, render_template, redirect, url_for, Response, session
 from flask_cors import CORS
 from io import BytesIO, StringIO
 from transformers import TextIteratorStreamer
+import uuid
 import threading
 import time
 from dotenv import load_dotenv
@@ -40,16 +41,11 @@ model = None
 embeddings = None
 pipe = None
 retriever = None
-assistant_response = """"""
 
 sys_prompt = """You are a helpful question answering chatbot. You will use the given context to answer user queries in concise manner.
 If the given context does not help in answering user's query then let the user know that you are not able to answer their query.
 Interact with user in short responses unless asked to elaborate, use context when they have a query, but do not answer question if not present in given context.
 ALways format your responses using html tags (<p>, <b>, <ul>, <li>). Do NOT use markdown formatting."""
-
-messages = [
-    {"role": "system", "content": sys_prompt},
-]
 
 # if __name__ == '__main__' or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
 def initialize_models():
@@ -146,6 +142,7 @@ def initialize_models():
 initialize_models()
 
 app = Flask(__name__)
+app.secret_key = "super_secret_123"
 CORS(app)
 
 @app.route('/')
@@ -206,7 +203,6 @@ def index_document():
 
 @app.route('/fetchresponse', methods=['POST'])
 def fetch_response():
-    global messages, assistant_response
     data = request.json
     query = data.get('query', None)
     if not query:
@@ -223,12 +219,27 @@ def fetch_response():
     if vector_store is None or tokenizer is None or model is None:
         return jsonify({"error": "System not fully initialized. Please try again."}), 503
     
+    # Initialize session-specific conversation
+    if 'conversation_id' not in session:
+        session['conversation_id'] = str(uuid.uuid4())
+        # session['messages'] = [{"role": "system", "content": sys_prompt}]
+        session['assistant_response'] = ""
+    
+    # messages = session['messages'].copy()  # Copy messages to avoid modifying session directly
+    assistant_response = session.get('assistant_response', "")
+
     # append assistant response to messages
     if len(assistant_response) > 1:
         print("Previous assistant response: ", assistant_response)
-        messages.append({"role": "assistant", "content": assistant_response})
-        assistant_response = """"""
+        # messages.append({"role": "assistant", "content": assistant_response})
+        # Save updated state back to session
+        # session['messages'] = messages
+        session['assistant_response'] = assistant_response = """"""  # Reset assistant response in session
     
+
+    print("Current conversation ID: ", session['conversation_id'])
+    
+
     r_st = time.time()
     # relevant_docs = vector_store.similarity_search(query, k=NUM_DOCS)
     # relevant_docs = []
@@ -254,18 +265,21 @@ def fetch_response():
     # print(context)
  
     msg_list = [
+        {"role": "system", "content": sys_prompt},
         {"role": "user", "content": context},
         {"role": "user", "content": query},
     ]
 
-    messages.extend(msg_list)
+    # messages.extend(msg_list)
 
-    print("Messages prepared for model input. Length:", len(messages))
+    # Save updated state back to session
+    # session['messages'] = messages
+
+    # print("Messages prepared for model input. Length:", len(messages))
     print("Generating response...")
 
-    
-
     def generate_stream():
+        nonlocal assistant_response  # Allow modification of the outer variable
         # assistant_response += f"<p><b>Retrieval time: {r_time:.2f} s.</b></p>\n\n"
         yield f"data: <p><b>Retrieval time {r_time:.2f} s.</b></p><div>\n\n"
         
@@ -273,7 +287,7 @@ def fetch_response():
 
         def run_model():
             _ = pipe(
-                messages,
+                msg_list,
                 max_new_tokens=512,
                 do_sample=True,
                 temperature=0.2,
@@ -300,11 +314,11 @@ def fetch_response():
 
 @app.route('/chatclear', methods=['POST'])
 def chat_clear():
-    global messages, assistant_response
-    messages = [
-        {"role": "system", "content": sys_prompt},
-    ]
-    assistant_response = """"""
+    session['conversation_id'] = str(uuid.uuid4())
+    # session['messages'] = [{"role": "system", "content": sys_prompt}]
+    session['assistant_response'] = ""
+    print("Chat cleared for new session: ", session['conversation_id'])
+
     return jsonify({"message": "Chat cleared successfully"}), 200
 
 if __name__ == '__main__':
