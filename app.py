@@ -25,12 +25,18 @@ CHUNK_CHARACTER_SIZE = 1500 # MAX 4000
 CHUNK_OVERLAP = int(CHUNK_CHARACTER_SIZE * 0.1) # 10% of chunk size
 # EMBEDDING_DIM = 384  # Value for sentence-transformers/all-MiniLM-L6-v2
 EMBEDDING_DIM = 768  # Value for sentence-transformers/all-mpnet-base-v2
+NUMBER_OF_CLUSTERS = 1024  # Number of clusters for IVF index
 
 # Index parameters for Milvus
 index_params = {
-    "index_type": "IVF_FLAT",
+    "index_type": "IVF_SQ8",
     "metric_type": "COSINE",
-    "params": {"nlist": 128}
+    "params": {"nlist": NUMBER_OF_CLUSTERS}
+}
+
+search_params = {
+    "metric_type": "COSINE",
+    "params": {"nprobe": int(NUMBER_OF_CLUSTERS * 0.125)}  # 12.5% of nlist (1024)
 }
 
 # Initialize global variables
@@ -42,10 +48,15 @@ embeddings = None
 pipe = None
 retriever = None
 
-sys_prompt = """You are a helpful question answering chatbot. You will use the given context to answer user queries in concise manner.
-If the given context does not help in answering user's query then let the user know that you are not able to answer their query.
-Interact with user in short responses unless asked to elaborate, use context when they have a query, but do not answer question if not present in given context.
-ALways format your responses using html tags (<p>, <b>, <ul>, <li>). Do NOT use markdown formatting."""
+sys_prompt = """You are a helpful question-answering chatbot. Use the provided context to answer user queries concisely. 
+
+- If the context does not contain information relevant to the user's query, inform them that you are unable to answer.
+
+- Respond with short answers unless the user explicitly asks for more detail. Only answer questions using the provided context — do not attempt to answer from general knowledge.
+
+- Always cite the specific sources used to answer the query at the end of your response. If no sources were used, no citation is needed.
+
+- Format all responses using HTML tags (<p>, <b>, <ul>, <li>, etc.). Do NOT use Markdown formatting."""
 
 # if __name__ == '__main__' or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
 def initialize_models():
@@ -111,6 +122,7 @@ def initialize_models():
         connection_args={"uri": f'http://{MILVUS_HOST}:{MILVUS_PORT}'},
         collection_name=COLLECTION_NAME,
         index_params=index_params,
+        search_params=search_params,  # Added search parameters
         primary_field="id",
         text_field="text",
         vector_field="embedding",
@@ -121,7 +133,7 @@ def initialize_models():
     # Maximum Marginal Relevance (MMR) - reduces redundancy
     retriever = vector_store.as_retriever(
         search_type="mmr",
-        search_kwargs={"k": NUM_DOCS, "fetch_k": 15, "lambda_mult": 0.65}
+        search_kwargs={"k": NUM_DOCS, "fetch_k": 20, "lambda_mult": 0.65}
     )
     print("Retriever is ready ✅")
 
@@ -185,6 +197,8 @@ def index_document():
             return jsonify({"error": "No text extracted from the provided documents"}), 400
 
         chunks = text_splitter.split_documents(doc_list)
+        for chunk in chunks:
+            chunk.page_content = chunk.page_content + f"\n\n(SOURCE: {chunk.metadata.get('filename', 'unknown')}, PAGE: {chunk.metadata.get('page', 'unknown')})"
         print(f"Created {len(chunks)} chunk(s).")
 
         # for ci in range(len(chunks)):
@@ -220,24 +234,24 @@ def fetch_response():
         return jsonify({"error": "System not fully initialized. Please try again."}), 503
     
     # Initialize session-specific conversation
-    if 'conversation_id' not in session:
-        session['conversation_id'] = str(uuid.uuid4())
+    # if 'conversation_id' not in session:
+        # session['conversation_id'] = str(uuid.uuid4())
         # session['messages'] = [{"role": "system", "content": sys_prompt}]
-        session['assistant_response'] = ""
+        # session['assistant_response'] = ""
     
     # messages = session['messages'].copy()  # Copy messages to avoid modifying session directly
-    assistant_response = session.get('assistant_response', "")
+    # assistant_response = session.get('assistant_response', "")
 
     # append assistant response to messages
-    if len(assistant_response) > 1:
-        print("Previous assistant response: ", assistant_response)
+    # if len(assistant_response) > 1:
+        # print("Previous assistant response: ", assistant_response)
         # messages.append({"role": "assistant", "content": assistant_response})
         # Save updated state back to session
         # session['messages'] = messages
-        session['assistant_response'] = assistant_response = """"""  # Reset assistant response in session
+        # session['assistant_response'] = assistant_response = """"""  # Reset assistant response in session
     
 
-    print("Current conversation ID: ", session['conversation_id'])
+    # print("Current conversation ID: ", session['conversation_id'])
     
 
     r_st = time.time()
@@ -279,10 +293,8 @@ def fetch_response():
     print("Generating response...")
 
     def generate_stream():
-        nonlocal assistant_response  # Allow modification of the outer variable
-        # assistant_response += f"<p><b>Retrieval time: {r_time:.2f} s.</b></p>\n\n"
-        yield f"data: <p><b>Retrieval time {r_time:.2f} s.</b></p><div>\n\n"
-        
+        # nonlocal assistant_response  # Allow modification of the outer variable
+        # assistant_response += f"<p><b>Retrieval time: {r_time:.2f} s.</b></p>\n\n"     
         streamer = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
 
         def run_model():
@@ -299,16 +311,17 @@ def fetch_response():
         thread.start()
 
         for chunk in streamer:
-            assistant_response += chunk
+            # assistant_response += chunk
             yield f"data: {chunk}\n\n"
 
         thread.join()  # Wait for the model generation to complete
 
         # Final sources section
-        sources_text = "</div><p><b>Sources:</b></p>"
-        for filename, pages in retrieval_info.items():
-            sources_text += f"<p>File: {filename}, Pages: {', '.join(pages)}</p>"
-        yield f"data: {sources_text}\n\n"
+        # sources_text = "</div><p><b>Sources:</b></p>"
+        # for filename, pages in retrieval_info.items():
+        #     sources_text += f"<p>File: {filename}, Pages: {', '.join(pages)}</p>"
+        # yield f"data: {sources_text}\n\n"
+        yield f"data: <p><b>Retrieval time {r_time:.2f} s.</b></p><div>\n\n"
         yield "data: [DONE]\n\n"
     
     # Return the response as a stream
@@ -325,14 +338,14 @@ def fetch_response():
     )
     return response
 
-@app.route('/chatclear', methods=['POST'])
-def chat_clear():
-    session['conversation_id'] = str(uuid.uuid4())
-    # session['messages'] = [{"role": "system", "content": sys_prompt}]
-    session['assistant_response'] = ""
-    print("Chat cleared for new session: ", session['conversation_id'])
+# @app.route('/chatclear', methods=['POST'])
+# def chat_clear():
+#     session['conversation_id'] = str(uuid.uuid4())
+#     # session['messages'] = [{"role": "system", "content": sys_prompt}]
+#     session['assistant_response'] = ""
+#     print("Chat cleared for new session: ", session['conversation_id'])
 
-    return jsonify({"message": "Chat cleared successfully"}), 200
+#     return jsonify({"message": "Chat cleared successfully"}), 200
 
 if __name__ == '__main__':
     app.run(debug=False, host='127.0.0.1', port=8000)
