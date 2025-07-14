@@ -59,7 +59,7 @@
                             <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
                             <h5 class="text-muted">Drop files here or click to select</h5>
                             <p class="text-muted mb-0">Supports PDF files • Multiple files allowed</p>
-                            <input type="file" id="fileInput" multiple accept=".pdf" style="display: none;">
+                            <input type="file" id="fileInput" multiple accept=".pdf,.docx,.txt" style="display: none;">
                         </div>
 
                         <!-- Selected Files List -->
@@ -137,13 +137,29 @@
             function handleFiles(files) {
                 for (let i = 0; i < files.length; i++) {
                     const file = files[i];
-                    if (file.type === 'application/pdf') {
+                    
+                    // Check if file type is supported
+                    if (file.type === 'application/pdf' || 
+                        file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
+                        file.type === 'text/plain') {
+                        
                         // Check if file already exists
                         if (!selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
                             selectedFiles.push(file);
                         }
                     } else {
-                        showAlert('warning', `"${file.name}" is not a PDF file and will be skipped.`);
+                        // Get file extension for better error messaging
+                        const fileExtension = file.name.split('.').pop().toLowerCase();
+                        const supportedTypes = ['pdf', 'docx', 'txt'];
+                        
+                        if (supportedTypes.includes(fileExtension)) {
+                            // File has correct extension but wrong MIME type, still allow it
+                            if (!selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
+                                selectedFiles.push(file);
+                            }
+                        } else {
+                            showAlert('warning', `"${file.name}" is not a supported file type (PDF, DOCX, or TXT) and will be skipped.`);
+                        }
                     }
                 }
                 updateFileList();
