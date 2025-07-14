@@ -36,7 +36,7 @@ index_params = {
 
 search_params = {
     "metric_type": "COSINE",
-    "params": {"nprobe": int(NUMBER_OF_CLUSTERS * 0.125)}  # 12.5% of nlist (1024)
+    "params": {"nprobe": int(NUMBER_OF_CLUSTERS * 0.2)}  # 20% of nlist (1024)
 }
 
 # Initialize global variables
