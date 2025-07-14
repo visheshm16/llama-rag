@@ -54,7 +54,11 @@ sys_prompt = """You are a helpful question-answering chatbot. Use the provided c
 
 - Respond with short answers unless the user explicitly asks for more detail. Only answer questions using the provided context — do not attempt to answer from general knowledge.
 
-- Always cite the specific sources used to answer the query at the end of your response. If no sources were used, no citation is needed.
+- If available, cite the specific sources used to answer the query at the end of your response.
+
+- If no sources were used, no citation is needed.
+
+- If no relevant documents were found then do not mention any sources.
 
 - Format all responses using HTML tags (<p>, <b>, <ul>, <li>, etc.). Do NOT use Markdown formatting."""
 
@@ -269,9 +273,9 @@ def fetch_response():
         context += "No relevant documents found.\n"
 
     for idx, doc in enumerate(relevant_docs):
-        # print(doc)
+        print(f"SOURCE: {doc.metadata.get('filename', 'unknown')}, {doc.metadata.get('page', 'unknown')})")
+        print(doc.page_content[:100], "...")  # Print first 100 characters of each document
         context += f"{idx}:\n{doc.page_content}\n(SOURCE: {doc.metadata.get('filename', 'unknown')}, {doc.metadata.get('page', 'unknown')})\n\n"
-
         retrieval_info[doc.metadata.get('filename', 'unknown')].append(str(doc.metadata.get('page', 'unknown')))
     
     context += "### End of Context\n"
@@ -338,14 +342,14 @@ def fetch_response():
     )
     return response
 
-# @app.route('/chatclear', methods=['POST'])
-# def chat_clear():
-#     session['conversation_id'] = str(uuid.uuid4())
-#     # session['messages'] = [{"role": "system", "content": sys_prompt}]
-#     session['assistant_response'] = ""
-#     print("Chat cleared for new session: ", session['conversation_id'])
+@app.route('/chatclear', methods=['POST'])
+def chat_clear():
+    # session['conversation_id'] = str(uuid.uuid4())
+    # session['messages'] = [{"role": "system", "content": sys_prompt}]
+    # session['assistant_response'] = ""
+    # print("Chat cleared for new session: ", session['conversation_id'])
 
-#     return jsonify({"message": "Chat cleared successfully"}), 200
+    return jsonify({"message": "Chat cleared successfully"}), 200
 
 if __name__ == '__main__':
     app.run(debug=False, host='127.0.0.1', port=8000)
