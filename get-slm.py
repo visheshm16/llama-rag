@@ -7,7 +7,7 @@ from huggingface_hub import login, snapshot_download
 login(token=os.getenv('HF_TOKEN'))
 
 
-lm_model_id = "microsoft/Phi-4-mini-instruct"
+lm_model_id = "meta-llama/Llama-3.1-8B-Instruct"
 embedding_model_id = "sentence-transformers/all-mpnet-base-v2"
 # embedding_model_id="intfloat/e5-base-v2"
 

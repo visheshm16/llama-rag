@@ -1,5 +1,8 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for, Response, session
 from flask_cors import CORS
+from PyPDF2 import PdfReader
+from langchain_core.documents import Document
+from docx import Document as DocxDocument
 from io import BytesIO, StringIO
 from transformers import TextIteratorStreamer
 import uuid
@@ -21,7 +24,7 @@ NUM_DOCS = int(os.getenv("NUM_DOCS", 5))
 GENERATION_LENGTH = 512
 TEMPERATURE = 0.2
 TOP_P = 0.95
-CHUNK_CHARACTER_SIZE = 1500 # MAX 4000
+CHUNK_CHARACTER_SIZE = 1500
 CHUNK_OVERLAP = int(CHUNK_CHARACTER_SIZE * 0.1) # 10% of chunk size
 # EMBEDDING_DIM = 384  # Value for sentence-transformers/all-MiniLM-L6-v2
 EMBEDDING_DIM = 768  # Value for sentence-transformers/all-mpnet-base-v2
@@ -48,13 +51,13 @@ embeddings = None
 pipe = None
 retriever = None
 
-sys_prompt = """You are a helpful question-answering chatbot. Use the provided context to answer user queries concisely. 
+sys_prompt = """You are a helpful question-answering chatbot. Use the provided context to provide to-the-point answer to user queries. 
 
 - If the context does not contain information relevant to the user's query, inform them that you are unable to answer.
 
 - Respond with short answers unless the user explicitly asks for more detail. Only answer questions using the provided context — do not attempt to answer from general knowledge.
 
-- If available, cite the specific sources used to answer the query at the end of your response.
+- If available, cite all the filenames and page numbers of all the sources used to answer the query at the end of your response.
 
 - If no sources were used, no citation is needed.
 
@@ -137,7 +140,7 @@ def initialize_models():
     # Maximum Marginal Relevance (MMR) - reduces redundancy
     retriever = vector_store.as_retriever(
         search_type="mmr",
-        search_kwargs={"k": NUM_DOCS, "fetch_k": 20, "lambda_mult": 0.65}
+        search_kwargs={"k": NUM_DOCS, "fetch_k": 20, "lambda_mult": 0.75}
     )
     print("Retriever is ready ✅")
 
@@ -171,9 +174,6 @@ def upload_document():
 
 @app.route('/indexdoc', methods=['POST'])
 def index_document():
-    from PyPDF2 import PdfReader
-    from langchain_core.documents import Document
-    
     uploaded_files = request.files.getlist('files')
     if not uploaded_files:
         return jsonify({"error": "No files provided"}), 400
@@ -185,17 +185,37 @@ def index_document():
     try:
         doc_list = []
         for file in uploaded_files:
-            print("Processing file: ",file.filename)
-            stream = BytesIO(file.read())
-            reader = PdfReader(stream)
-            pages = reader.pages
+            if file.filename.endswith('.pdf'):
+                print("Processing PDF: ",file.filename)
+                stream = BytesIO(file.read())
+                reader = PdfReader(stream)
+                pages = reader.pages
 
-            for page_num in range(len(pages)):
-                page = pages[page_num]
-                text = page.extract_text()
+                for page_num in range(len(pages)):
+                    page = pages[page_num]
+                    text = page.extract_text()
+                    if text:
+                        text = text.replace('\n', ' ').strip()
+                        doc_list.append(Document(page_content=text, metadata={"filename": file.filename, "page": page_num + 1}))
+            elif file.filename.endswith('.docx'):
+                print("Processing DOCX: ", file.filename)
+                # Read the file content into a BytesIO stream
+                stream = BytesIO(file.read())
+                # Create a Document object from the stream
+                docx_doc = DocxDocument(stream)
+
+                # Extract text from all paragraphs
+                for paragraph in docx_doc.paragraphs:
+                    if paragraph.text.strip():
+                        doc_list.append(Document(page_content=paragraph.text.strip(), metadata={"filename": file.filename, "page": 1}))
+            
+            elif file.filename.endswith('.txt'):
+                print("Processing TXT: ", file.filename)
+                text = file.read().decode('utf-8').strip()
                 if text:
-                    text = text.replace('\n', ' ').strip()
-                    doc_list.append(Document(page_content=text, metadata={"filename": file.filename, "page": page_num + 1}))
+                    doc_list.append(Document(page_content=text, metadata={"filename": file.filename, "page": 1}))
+            else:
+                print("Unsupported file type, skipping: ", file.filename)
         
         if len(doc_list) == 0:
             return jsonify({"error": "No text extracted from the provided documents"}), 400
@@ -304,7 +324,7 @@ def fetch_response():
         def run_model():
             _ = pipe(
                 msg_list,
-                max_new_tokens=512,
+                max_new_tokens=1024,
                 do_sample=True,
                 temperature=0.2,
                 top_p=0.95,
@@ -325,7 +345,7 @@ def fetch_response():
         # for filename, pages in retrieval_info.items():
         #     sources_text += f"<p>File: {filename}, Pages: {', '.join(pages)}</p>"
         # yield f"data: {sources_text}\n\n"
-        yield f"data: <p><b>Retrieval time {r_time:.2f} s.</b></p><div>\n\n"
+        yield f"data: <h6>Retrieval time {r_time:.2f} s.</h6>\n\n"
         yield "data: [DONE]\n\n"
     
     # Return the response as a stream
