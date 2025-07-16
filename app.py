@@ -357,7 +357,7 @@ def fetch_response():
         context += f"{idx}:\n{doc.page_content}\n(SOURCE: {doc.metadata.get('filename', 'unknown')}, {doc.metadata.get('page', 'unknown')})\n\n"
         retrieval_info[doc.metadata.get('filename', 'unknown')].append(str(doc.metadata.get('page', 'unknown')))
     
-    context += "# MySQL Relevant Data:\n\n" + db_response + "\n\n"
+    context += "# MySQL Search Query:\n" + sql_response+ "\nMySQL Response:\n" + db_response + "\n\n"
     context += "### End of Context\n"
 
     # print(context)
