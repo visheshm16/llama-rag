@@ -50,6 +50,8 @@ model = None
 embeddings = None
 pipe = None
 retriever = None
+db = None
+schema = None
 
 sys_prompt = """You are a helpful question-answering chatbot. Use the provided context to provide to-the-point answer to user queries. 
 
@@ -65,10 +67,32 @@ sys_prompt = """You are a helpful question-answering chatbot. Use the provided c
 
 - Format all responses using HTML tags (<p>, <b>, <ul>, <li>, etc.). Do NOT use Markdown formatting."""
 
+sql_gen_template = """Based on the table schema below, write a SQL query that would answer the user's question:
+{schema}
+
+If required use joins, aggregate functions and do computations as per the question. Return RAW SQL query ONLY.
+"""
+
+def clean_sql(sql: str):
+    # extract ```sql...``` part
+    if "```sql" in sql:
+        sql = sql.split("```sql")[1]
+        sql = sql.split("```")[0]
+    elif "```" in sql:
+        sql = sql.split("```")[1]
+        sql = sql.split("```")[0]
+    else:
+        sql = sql.strip()
+    
+    sql = sql.replace("\t", " ")
+    sql = sql.replace("\n", " ")
+    sql = re.sub(r'\s+', ' ', sql)  # replace multiple spaces with a single space
+    return sql
+
 # if __name__ == '__main__' or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
 def initialize_models():
     """Initialize all models and components"""
-    global text_splitter, vector_store, tokenizer, model, embeddings, pipe, retriever
+    global text_splitter, vector_store, tokenizer, model, embeddings, pipe, retriever, db, schema
     
     if text_splitter is not None:  # Already initialized
         print("# INITIALIZATION ALREADY DONE #")
@@ -82,6 +106,7 @@ def initialize_models():
     from pymilvus import connections, Collection, CollectionSchema, FieldSchema, DataType, utility
     from langchain_huggingface import HuggingFaceEmbeddings
     from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM
+    from langchain_community.utilities import SQLDatabase
     
 
     print("Done ✅")
@@ -143,6 +168,11 @@ def initialize_models():
         search_kwargs={"k": NUM_DOCS, "fetch_k": 20, "lambda_mult": 0.75}
     )
     print("Retriever is ready ✅")
+    
+    mysql_uri = f"mysql+mysqlconnector://{os.getenv('SQL_USERNAME')}:{os.getenv('SQL_PASSWORD')}@{os.getenv('SQL_HOST')}:{os.getenv('SQL_PORT')}/{os.getenv('SQL_DATABASE')}"
+    db = SQLDatabase.from_uri(mysql_uri)
+    schema = db.get_table_info()
+    print("Connected to database ✅")
 
     # Load tokenizer and model separately
     tokenizer = AutoTokenizer.from_pretrained('huggingface_model', local_files_only=True)
@@ -254,7 +284,7 @@ def fetch_response():
     print("Recieved query: ", query)
 
     # Check if initialization completed
-    if vector_store is None or tokenizer is None or model is None:
+    if vector_store is None or tokenizer is None or model is None or db is None:
         return jsonify({"error": "System not fully initialized. Please try again."}), 503
     
     # Initialize session-specific conversation
@@ -277,6 +307,35 @@ def fetch_response():
 
     # print("Current conversation ID: ", session['conversation_id'])
     
+    msg_list = [
+        {"role": "system", "content": sql_gen_template.format(schema=schema)},
+        {"role": "user", "content": query},
+    ]
+    print("🧠 Generating SQL query...")
+    output = pipe(
+        msg_list,
+        max_new_tokens=512,
+        do_sample=True,
+        temperature=0.2,
+        top_p=0.95
+    )
+    response = output[0]['generated_text'][-1]['content']
+    response_parts = response.split("<|assistant|>")
+    sql_response = ""
+    if len(response_parts) > 1:
+        # final_response += markdown.markdown(response_parts[1].strip())
+        sql_response += response_parts[1].strip()
+    else:
+        # final_response += markdown.markdown(response)
+        sql_response += response.strip()
+    
+
+    print("SQL Query generated: ", sql_response)
+    sql_response = clean_sql(sql_response)
+
+    # Run the SQL query
+    db_response = db.run(sql_response)
+    print("SQL Response: ", db_response)
 
     r_st = time.time()
     # relevant_docs = vector_store.similarity_search(query, k=NUM_DOCS)
@@ -298,6 +357,7 @@ def fetch_response():
         context += f"{idx}:\n{doc.page_content}\n(SOURCE: {doc.metadata.get('filename', 'unknown')}, {doc.metadata.get('page', 'unknown')})\n\n"
         retrieval_info[doc.metadata.get('filename', 'unknown')].append(str(doc.metadata.get('page', 'unknown')))
     
+    context += "# MySQL Relevant Data:\n\n" + db_response + "\n\n"
     context += "### End of Context\n"
 
     # print(context)
