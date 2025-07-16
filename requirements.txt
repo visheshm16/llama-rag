@@ -16,3 +16,4 @@ PyPDF2
 gunicorn
 markdown
 python-docx
+mysql-connector-python
