@@ -309,7 +309,7 @@ def fetch_response():
     
     msg_list = [
         {"role": "system", "content": sql_gen_template.format(schema=schema)},
-        {"role": "user", "content": query},
+        {"role": "user", "content": "### User Query: "+query},
     ]
     print("🧠 Generating SQL query...")
     output = pipe(
@@ -334,7 +334,11 @@ def fetch_response():
     sql_response = clean_sql(sql_response)
 
     # Run the SQL query
-    db_response = db.run(sql_response)
+    try:
+        db_response = db.run(sql_response)
+    except Exception as e:
+        print(f"Error executing SQL query: {e}")
+        db_response = "No results from SQL Database."
     print("SQL Response: ", db_response)
 
     r_st = time.time()
@@ -357,7 +361,7 @@ def fetch_response():
         context += f"{idx}:\n{doc.page_content}\n(SOURCE: {doc.metadata.get('filename', 'unknown')}, {doc.metadata.get('page', 'unknown')})\n\n"
         retrieval_info[doc.metadata.get('filename', 'unknown')].append(str(doc.metadata.get('page', 'unknown')))
     
-    context += "# MySQL Search Query:\n" + sql_response+ "\nMySQL Response:\n" + db_response + "\n\n"
+    context += f"# MySQL DB name: {os.getenv('SQL_DATABASE')}\nSearch Query:\n" + sql_response+ "\nMySQL Response:\n" + db_response + "\n\n"
     context += "### End of Context\n"
 
     # print(context)
@@ -365,7 +369,7 @@ def fetch_response():
     msg_list = [
         {"role": "system", "content": sys_prompt},
         {"role": "user", "content": context},
-        {"role": "user", "content": query},
+        {"role": "user", "content": "### User Query:" + query},
     ]
 
     # messages.extend(msg_list)
