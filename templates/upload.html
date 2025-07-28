@@ -30,7 +30,7 @@
         }
         .file-item {
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
             padding: 8px 12px;
             background-color: #f8f9fa;
@@ -58,8 +58,8 @@
                         <div class="upload-area" id="uploadArea">
                             <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
                             <h5 class="text-muted">Drop files here or click to select</h5>
-                            <p class="text-muted mb-0">Supports PDF files • Multiple files allowed</p>
-                            <input type="file" id="fileInput" multiple accept=".pdf" style="display: none;">
+                            <p class="text-muted mb-0">Supports PDF, Word and Text files • Multiple files allowed</p>
+                            <input type="file" id="fileInput" multiple accept=".pdf,.docx,.txt" style="display: none;">
                         </div>
 
                         <!-- Selected Files List -->
@@ -102,13 +102,13 @@
         $(document).ready(function() {
             let selectedFiles = [];
 
-            // Upload area click handler
-            $('#uploadArea').click(function() {
-                $('#fileInput').click();
+            // Upload area click handler - Using native DOM method
+            document.getElementById('uploadArea').addEventListener('click', function() {
+                document.getElementById('fileInput').click();
             });
 
             // File input change handler
-            $('#fileInput').change(function() {
+            $('#fileInput').on('change', function() {
                 handleFiles(this.files);
             });
 
@@ -137,13 +137,29 @@
             function handleFiles(files) {
                 for (let i = 0; i < files.length; i++) {
                     const file = files[i];
-                    if (file.type === 'application/pdf') {
+                    
+                    // Check if file type is supported
+                    if (file.type === 'application/pdf' || 
+                        file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
+                        file.type === 'text/plain') {
+                        
                         // Check if file already exists
                         if (!selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
                             selectedFiles.push(file);
                         }
                     } else {
-                        showAlert('warning', `"${file.name}" is not a PDF file and will be skipped.`);
+                        // Get file extension for better error messaging
+                        const fileExtension = file.name.split('.').pop().toLowerCase();
+                        const supportedTypes = ['pdf', 'docx', 'txt'];
+                        
+                        if (supportedTypes.includes(fileExtension)) {
+                            // File has correct extension but wrong MIME type, still allow it
+                            if (!selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
+                                selectedFiles.push(file);
+                            }
+                        } else {
+                            showAlert('warning', `"${file.name}" is not a supported file type (PDF, DOCX, or TXT) and will be skipped.`);
+                        }
                     }
                 }
                 updateFileList();
@@ -160,10 +176,12 @@
                     selectedFiles.forEach((file, index) => {
                         const fileItem = $(`
                             <div class="file-item">
-                                <i class="fas fa-file-pdf text-danger me-2"></i>
-                                <span class="file-name">${file.name}</span>
-                                <small class="text-muted ms-2">(${formatFileSize(file.size)})</small>
-                                <button class="btn btn-sm btn-outline-danger ms-auto" onclick="removeFile(${index})">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-file-pdf text-danger me-2"></i>
+                                    <span class="file-name">${file.name}</span>
+                                    <small class="text-muted ms-2">(${formatFileSize(file.size)})</small>
+                                </div>
+                                <button class="btn btn-sm btn-outline-danger" data-file-index="${index}">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </div>
@@ -175,12 +193,13 @@
                 }
             }
 
-            // Remove file from list
-            window.removeFile = function(index) {
+            // Remove file from list - Using event delegation
+            $(document).on('click', '[data-file-index]', function() {
+                const index = parseInt($(this).attr('data-file-index'));
                 selectedFiles.splice(index, 1);
                 updateFileList();
                 updateButtons();
-            }
+            });
 
             // Update button states
             function updateButtons() {
@@ -190,7 +209,7 @@
             }
 
             // Clear all files
-            $('#clearBtn').click(function() {
+            $('#clearBtn').on('click', function() {
                 selectedFiles = [];
                 updateFileList();
                 updateButtons();
@@ -199,7 +218,7 @@
             });
 
             // Upload files
-            $('#uploadBtn').click(function() {
+            $('#uploadBtn').on('click', function() {
                 if (selectedFiles.length === 0) return;
 
                 const formData = new FormData();

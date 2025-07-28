@@ -1,137 +1,148 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for
 from flask_cors import CORS
+
 from io import BytesIO
 import time
+
 from dotenv import load_dotenv
 load_dotenv()
 import os
 import re
-import torch
+
+import boto3
+
 from collections import defaultdict
-import markdown
+import uuid
+import json
+
+from langchain_core.documents import Document
+from langchain.text_splitter import TokenTextSplitter
+
+import pandas as pd
+from PyPDF2 import PdfReader
+from docx import Document as DocxDocument
+
 
 # --- Config ---
-COLLECTION_NAME = os.getenv("MILVUS_COLLECTION", "default_collection")
-MILVUS_HOST = os.getenv("MILVUS_HOST", "127.0.0.1")
-MILVUS_PORT = os.getenv("MILVUS_PORT", "19530")
-NUM_DOCS = int(os.getenv("NUM_DOCS", 8))
-GENERATION_LENGTH = 512
+VECTOR_BUCKET_NAME = os.getenv("VECTOR_BUCKET_NAME")
+VECTOR_INDEX_NAME = os.getenv("VECTOR_INDEX_NAME")
+BEDROCK_LLM_MODEL_ID = os.getenv("BEDROCK_LLM_MODEL_ID")
+BEDROCK_EMBEDDING_MODEL_ID = os.getenv("BEDROCK_EMBEDDING_MODEL_ID")
+NUM_DOCS = int(os.getenv("NUM_DOCS", 5))
+GENERATION_LENGTH = 1024  # Max length of generated response
 TEMPERATURE = 0.2
 TOP_P = 0.95
-CHUNK_CHARACTER_SIZE = 1500 # MAX 4000
-CHUNK_OVERLAP = int(CHUNK_CHARACTER_SIZE * 0.1) # 10% of chunk size
+CHUNK_TOKENS_SIZE = 2000 # Size of each text chunk in tokens
+CHUNK_OVERLAP = int(CHUNK_TOKENS_SIZE * 0.1) # 10% of chunk size
 # EMBEDDING_DIM = 384  # Value for sentence-transformers/all-MiniLM-L6-v2
-EMBEDDING_DIM = 768  # Value for sentence-transformers/all-mpnet-base-v2
-
-# Index parameters for Milvus
-index_params = {
-    "index_type": "IVF_FLAT",
-    "metric_type": "COSINE",
-    "params": {"nlist": 128}
-}
+# EMBEDDING_DIM = 768  # Value for sentence-transformers/all-mpnet-base-v2
+EMBEDDING_DIM = 1024  # Value for amazon.titan-embed-text-v2:0
+ENCODING_NAME = "cl100k_base"  # Byte Pair Encoding (BPE)
 
 # Initialize global variables
-text_splitter = None
-vector_store = None
-tokenizer = None
-model = None
-embeddings = None
-pipe = None
-retriever = None
+text_splitter = TokenTextSplitter(chunk_size=CHUNK_TOKENS_SIZE, chunk_overlap=CHUNK_OVERLAP, encoding_name=ENCODING_NAME)
+print("Text splitter created ✅")
 
-# if __name__ == '__main__' or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
-def initialize_models():
-    """Initialize all models and components"""
-    global text_splitter, vector_store, tokenizer, model, embeddings, pipe, retriever
-    
-    if text_splitter is not None:  # Already initialized
-        print("# INITIALIZATION ALREADY DONE #")
-        return
-    
-    print("Starting library imports...")
-    # from PyPDF2 import PdfReader
-    from langchain.text_splitter import RecursiveCharacterTextSplitter
-    # from langchain_core.documents import Document
-    from langchain_milvus import Milvus
-    from pymilvus import connections, Collection, CollectionSchema, FieldSchema, DataType, utility
-    from langchain_huggingface import HuggingFaceEmbeddings
-    from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM
-    
+bedrock = boto3.client(
+    "bedrock-runtime",
+    aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+    region_name=os.getenv("AWS_REGION")
+)
+print("Bedrock client created ✅")
 
-    print("Done ✅")
-    print("Using CUDA" if torch.cuda.is_available() else "CUDA not found, using CPU")
+s3vectors = boto3.client(
+    "s3vectors",
+    aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+    region_name=os.getenv("AWS_REGION")
+)
+print("S3 Vectors client created ✅")
 
-    # --- Load Embedding Model ---
-    embeddings = HuggingFaceEmbeddings(model_name='./huggingface_embedder')
-    print("Embedding model loaded ✅")
+sys_prompt = """You are a helpful question-answering chatbot. Use the provided context to provide to-the-point answer to user queries. 
 
-    # --- Define Text Splitter ---
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_CHARACTER_SIZE, chunk_overlap=CHUNK_OVERLAP, separators=["\n\n", "\n", ". "], length_function=len)
+- If the context does not contain information relevant to the user's query, inform them that you are unable to answer.
+- Respond with short answers unless the user explicitly asks for more detail. Only answer questions using the provided context — do not attempt to answer from general knowledge.
+- If available, cite all the filenames and page numbers of all the sources used to answer the query at the end of your response.
+- If no sources were used, no citation is needed.
+- If no relevant documents were found then do not mention any sources.
+- Format all responses using HTML tags (<p>, <b>, <ul>, <li>, etc.). Do NOT use Markdown formatting."""
 
-    # --- Connect to Milvus ---
-    connections.connect(
-        alias="default",
-        host=MILVUS_HOST,
-        port=MILVUS_PORT
+# Embed one text chunk
+def embed_text(text):
+    response = bedrock.invoke_model(
+        modelId=BEDROCK_EMBEDDING_MODEL_ID,
+        body=json.dumps({"inputText": text})
     )
-    print("Connected to Milvus ✅")
+    embedding = json.loads(response["body"].read())["embedding"]
+    return embedding
 
-    # --- Check and Create Collection ---
-    existing_collections = utility.list_collections()
-    if COLLECTION_NAME not in existing_collections:
-        print(f"Creating new collection: {COLLECTION_NAME}")
-        schema = CollectionSchema(
-            fields=[
-                FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
-                FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=EMBEDDING_DIM),
-                FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=4096),
-                # Add metadata fields
-                FieldSchema(name="filename", dtype=DataType.VARCHAR, max_length=400),
-                FieldSchema(name="page", dtype=DataType.INT64),
-            ]
+# Query S3 vector store with user prompt
+def query_prompt(prompt, top_k=5):
+    """Query the vector store and return relevant chunks"""
+    embedding = embed_text(prompt)
+    response = s3vectors.query_vectors(
+        vectorBucketName=VECTOR_BUCKET_NAME,
+        indexName=VECTOR_INDEX_NAME,
+        queryVector={"float32": embedding},
+        topK=top_k,
+        returnDistance=True,
+        returnMetadata=True
+    )
+    
+    retrieved_chunks = []
+    
+    for v in response["vectors"]:
+        chunk_text = v["metadata"].get("chunk_text", "")
+        source = v["metadata"].get("filename", "Unknown")
+        page = v["metadata"].get("page", "1")
+        distance = v.get("distance", 0)
+
+        langchain_doc = Document(
+            page_content=chunk_text,
+            metadata={
+                "filename": source,
+                "page": page,
+                "distance": 1 - distance,
+            }
         )
-        collection = Collection(name=COLLECTION_NAME, schema=schema)
-        collection.create_index(field_name="embedding", index_params=index_params)
-        collection.load()
-        print(f"Collection '{COLLECTION_NAME}' created and loaded ✅")
-    else:
-        print(f"✅ Collection '{COLLECTION_NAME}' already exists, skipping creation.")
+        
+        retrieved_chunks.append(langchain_doc)
+    
+    return retrieved_chunks
 
-    # --- Define Vector Store ---
-    vector_store = Milvus(
-        embedding_function=embeddings,
-        connection_args={"uri": f'http://{MILVUS_HOST}:{MILVUS_PORT}'},
-        collection_name=COLLECTION_NAME,
-        index_params=index_params,
-        primary_field="id",
-        text_field="text",
-        vector_field="embedding",
-        auto_id=True,
-    )
-    print("Milvus VectorStore is ready ✅")
+def batch_index_documents(documents, batch_size=10):
+    """Helper function to index documents in batches.
+    Convert langchain DOcuments to S3 Vectors format and index them in batches.
+    }"""
+    total_length = len(documents)
+    number_of_batches = (total_length + batch_size - 1) // batch_size
 
-    # Maximum Marginal Relevance (MMR) - reduces redundancy
-    retriever = vector_store.as_retriever(
-        search_type="mmr",
-        search_kwargs={"k": NUM_DOCS, "fetch_k": 20, "lambda_mult": 0.65}
-    )
-    print("Retriever is ready ✅")
+    for i in range(number_of_batches):
+        start_index = i * batch_size
+        end_index = min(start_index + batch_size, total_length)
+        batch = documents[start_index:end_index]
 
-    # Load tokenizer and model separately
-    tokenizer = AutoTokenizer.from_pretrained('huggingface_model', local_files_only=True)
-    print("Loaded tokenizer ✅")
-    model = AutoModelForCausalLM.from_pretrained('huggingface_model', torch_dtype=torch.bfloat16, device_map="auto", local_files_only=True)
-    print("Model loaded ✅")
+        # convert batch to list of dictionaries for S3 Vectors
+        batch = [{
+            "key": str(uuid.uuid4()),
+            "data": {"float32": embed_text(doc.page_content)},
+            "metadata": {
+                "chunk_text": doc.page_content, # to be set as non filterable metadata when creating index in S3 Vectors
+                "filename": doc.metadata.get("filename", "unknown"),
+                "page": str(doc.metadata.get("page", "unknown"))
+            }
+        } for doc in batch]
+        
+        # Add the batch to the vector store
+        response = s3vectors.put_vectors(
+            vectorBucketName=VECTOR_BUCKET_NAME,
+            indexName=VECTOR_INDEX_NAME,
+            vectors=batch
+        )
+        
+        print(f"Indexed batch {i + 1}/{number_of_batches} with {len(batch)} documents.")
 
-    pipe = pipeline(
-        "text-generation",
-        model=model,
-        tokenizer=tokenizer,
-    )
-    print("Pipeline created ✅")
-
-# Initialize models when module is imported (works with both Flask dev server and Gunicorn)
-initialize_models()
 
 app = Flask(__name__)
 CORS(app)
@@ -145,45 +156,67 @@ def upload_document():
     return render_template('upload.html')
 
 @app.route('/indexdoc', methods=['POST'])
-def index_document():
-    from PyPDF2 import PdfReader
-    from langchain_core.documents import Document
-    
+def index_document():   
     uploaded_files = request.files.getlist('files')
     if not uploaded_files:
         return jsonify({"error": "No files provided"}), 400
     
     # Check if initialization completed
-    if text_splitter is None or vector_store is None:
+    if text_splitter is None or bedrock is None or s3vectors is None:
         return jsonify({"error": "System not fully initialized. Please try again."}), 503
     
     try:
         doc_list = []
         for file in uploaded_files:
-            print("Processing file: ",file.filename)
-            stream = BytesIO(file.read())
-            reader = PdfReader(stream)
-            pages = reader.pages
+            if file.filename.endswith('.pdf'):
+                print("Processing PDF: ",file.filename)
+                stream = BytesIO(file.read())
+                reader = PdfReader(stream)
+                pages = reader.pages
 
-            for page_num in range(len(pages)):
-                page = pages[page_num]
-                text = page.extract_text()
+                for page_num in range(len(pages)):
+                    page = pages[page_num]
+                    text = page.extract_text()
+                    if text:
+                        text = text.replace('\n', ' ').strip()
+                        doc_list.append(Document(page_content=text, metadata={"filename": file.filename, "page": page_num + 1}))
+            elif file.filename.endswith('.docx'):
+                print("Processing DOCX: ", file.filename)
+                # Read the file content into a BytesIO stream
+                stream = BytesIO(file.read())
+                # Create a Document object from the stream
+                docx_doc = DocxDocument(stream)
+
+                # Extract text from all paragraphs
+                for paragraph in docx_doc.paragraphs:
+                    if paragraph.text.strip():
+                        doc_list.append(Document(page_content=paragraph.text.strip(), metadata={"filename": file.filename, "page": 1}))
+            
+            elif file.filename.endswith('.txt'):
+                print("Processing TXT: ", file.filename)
+                text = file.read().decode('utf-8').strip()
                 if text:
-                    text = text.replace('\n', ' ').strip()
-                    doc_list.append(Document(page_content=text, metadata={"filename": file.filename, "page": page_num + 1}))
+                    doc_list.append(Document(page_content=text, metadata={"filename": file.filename, "page": 1}))
+            else:
+                print("Unsupported file type, skipping: ", file.filename)
         
         if len(doc_list) == 0:
             return jsonify({"error": "No text extracted from the provided documents"}), 400
 
         chunks = text_splitter.split_documents(doc_list)
+        for chunk in chunks:
+            chunk.page_content = chunk.page_content + f"\n\n(SOURCE: {chunk.metadata.get('filename', 'unknown')}, PAGE: {chunk.metadata.get('page', 'unknown')})"
+            encoded = chunk.page_content.encode("utf-8")
+            print("Size in bytes: ", len(encoded))
         print(f"Created {len(chunks)} chunk(s).")
+        # breakpoint()
 
         # for ci in range(len(chunks)):
         #     modified_text = "passage: " + chunks[ci].page_content
         #     chunks[ci].page_content = modified_text
 
         st = time.time()
-        vector_store.add_documents(chunks)
+        batch_index_documents(chunks, batch_size=10)
         et = time.time()
         print(f"Took {et - st} seconds to insert chunk(s) into Milvus!")
         
@@ -204,20 +237,18 @@ def fetch_response():
     
     query = query.strip()
 
-    print("Recieved query: ", query)
+    print("Received query: ", query)
 
     # Check if initialization completed
-    if vector_store is None or tokenizer is None or model is None:
+    if bedrock is None or s3vectors is None:
         return jsonify({"error": "System not fully initialized. Please try again."}), 503
     
     r_st = time.time()
     # relevant_docs = vector_store.similarity_search(query, k=NUM_DOCS)
-    relevant_docs = retriever.invoke(query)
+    relevant_docs = query_prompt(prompt=query, top_k=NUM_DOCS)
     r_time = time.time() - r_st
 
     print(f"Retrieval time: {r_time}, {len(relevant_docs)} docs fetched.")
-
-    retrieval_info = defaultdict(list)
 
     context = "### Relevant Context:\n"
     if not relevant_docs:
@@ -225,73 +256,39 @@ def fetch_response():
 
     for idx, doc in enumerate(relevant_docs):
         # print(doc)
-        context += f"{idx}:\n{doc.page_content}\n(SOURCE: {doc.metadata.get('filename', 'unknown')}, {doc.metadata.get('page', 'unknown')})\n\n"
-
-        retrieval_info[doc.metadata.get('filename', 'unknown')].append(str(doc.metadata.get('page', 'unknown')))
+        context += f"{idx}, RELEVANCE: {doc.metadata.get('distance', 'unknown')}\n{doc.page_content}\n-----\n"
     
     context += "### End of Context\n"
 
     print(context)
 
-    sys_prompt = """You are a helpful question answering chatbot. You will use the given context to answer user queries in concise manner.
-If the given context does not help in answering user's query then let the user know that you are not able to answer their query.
-Interact with user in short responses unless asked to elaborate, use context when they have a query, but do not answer question if not present in given context.
-ALways format your responses using html tags (<p>, <b>, <ul>, <li>). Do NOT use markdown formatting."""
- 
     messages = [
-        {"role": "system", "content": sys_prompt},
-        {"role": "system", "content": context},
-        {"role": "user", "content": query},
+        {"role": "user", "content": [{"text":context},{"text":"### USER QUERY: "+query}]}
     ]
-    
-    # import torch
-    # print("Tokenizing input string")
-    # if torch.cuda.is_available():
-    #     inputs = tokenizer(prompt, return_tensors="pt").to('cuda')
-    # else:
-    #     inputs = tokenizer(prompt, return_tensors="pt")
 
     print("Starting generation...")
     g_st = time.time()
-    # output = model.generate(
-    #     **inputs,
-    #     max_new_tokens=512,
-    #     temperature=0.25,      # Lower for more consistency
-    #     top_p=0.95,          # Slightly higher for quality
-    #     do_sample=True,
-    #     pad_token_id=tokenizer.eos_token_id
-    # )
-    # response = tokenizer.decode(output[0], skip_special_tokens=True)
-    output = pipe(messages, max_length=GENERATION_LENGTH, do_sample=True, temperature=TEMPERATURE, top_p=TOP_P)
-    response = output[0]['generated_text'][-1]['content']
+    model_response = bedrock.converse(
+        modelId=BEDROCK_LLM_MODEL_ID,
+        messages=messages,
+        system=[{"text": sys_prompt}],
+        inferenceConfig={
+            'maxTokens': GENERATION_LENGTH,
+            'temperature': TEMPERATURE,
+            'topP': TOP_P,
+        },
+    )
+    response = model_response["output"]["message"]["content"][0]["text"]
     g_time = time.time() - g_st
     # breakpoint()
 
     print("Response created, took "+str(g_time)+" seconds.")
     
-    print("\n\nFull reponse:\n",response)
-    # Extract just the assistant's response
-    response_parts = response.split("<|assistant|>")
-    final_response = f"<p><b>Retrieval time {r_time} s.</b></p>"
-    if len(response_parts) > 1:
-        # final_response += markdown.markdown(response_parts[1].strip())
-        final_response += response_parts[1].strip()
-    else:
-        # final_response += markdown.markdown(response)
-        final_response += response
+    print("\n\nModel reponse:\n",response)
 
-    final_response +=  f"<p><b>Generation time {g_time} s.</b></p>"
-
-    final_response = re.sub(r'<\|[^|]*\|>', '', final_response)
-    final_response = re.sub(r'<\|reserved_special_token_\d+\|>', '', final_response)
-
-    final_response +=  "<p><b>Sources:</b></p>"
-    for filename in retrieval_info.keys():
-        final_response += f"<p>File: {filename}, Pages: {', '.join(retrieval_info[filename])}</p>"
-
-    print("\n\nGenerated response:\n",final_response)
+    response = response.strip() + f"<div><pre>Retrieval time {r_time} s.</pre><pre>Generation time {g_time} s.</pre></div>"
     
-    return jsonify({"message": final_response}), 200
+    return jsonify({"message": response}), 200
 
 if __name__ == '__main__':
     app.run(debug=False, host='127.0.0.1', port=8000)
