@@ -286,7 +286,7 @@ def fetch_response():
     
     print("\n\nModel reponse:\n",response)
 
-    response = response.strip() + f"<div><pre>Retrieval time {r_time} s.</pre><pre>Generation time {g_time} s.</pre></div>"
+    # response = response.strip() + f"<div><pre>Retrieval time {r_time} s.</pre><pre>Generation time {g_time} s.</pre></div>"
     
     return jsonify({"message": response}), 200
 
