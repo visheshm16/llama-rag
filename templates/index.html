@@ -89,6 +89,30 @@
             margin-bottom: 10px;
             margin-top: 10px;
         }
+
+        /* New layout to place buttons beside textarea */
+        .input-flex {
+            display: flex;
+            gap: 15px;
+            align-items: stretch;
+        }
+
+        .textarea-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .button-column {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 180px;
+        }
+
+        .button-column .btn {
+            width: 100%;
+        }
         
         .form-label {
             color: #333;
@@ -268,6 +292,19 @@
                 gap: 15px;
                 text-align: center;
             }
+            
+            .input-flex {
+                flex-direction: column;
+            }
+            
+            .button-column {
+                width: 100%;
+                flex-direction: row;
+            }
+            
+            .button-column .btn {
+                flex: 1;
+            }
         }
     </style>
 </head>
@@ -310,29 +347,29 @@
                     <label for="userinput" class="form-label h5">
                         <i class="fas fa-question-circle me-2"></i>Ask your question...
                     </label>
-                    <textarea class="form-control" 
-                              id="userinput" 
-                              rows="4" 
-                              placeholder="Type your message here..."
-                              maxlength="1000"></textarea>
-                    <div class="text-muted mt-2">
-                        <small><span id="charCount">0</span>/1000 characters</small>
+                    <div class="input-flex">
+                        <div class="textarea-wrapper">
+                            <textarea class="form-control" 
+                                      id="userinput" 
+                                      rows="4" 
+                                      placeholder="Type your message here..."
+                                      maxlength="1000"></textarea>
+                            <div class="text-muted mt-2">
+                                <small><span id="charCount">0</span>/1000 characters</small>
+                            </div>
+                        </div>
+                        <div class="button-column">
+                            <button type="button" class="btn btn-success" id="submit-btn">
+                                <i class="fas fa-paper-plane me-2"></i>send
+                            </button>
+                            <button type="button" class="btn btn-danger" id="clear-btn">
+                                <i class="fas fa-trash me-2"></i>clear
+                            </button>
+                            <a href="/uploaddocument" class="btn btn-outline-primary">
+                                <i class="fas fa-upload me-2"></i>upload docs
+                            </a>
+                        </div>
                     </div>
-                </div>
-                
-                <div class="button-group">
-                    <button type="button" class="btn btn-success" id="submit-btn">
-                        <i class="fas fa-paper-plane me-2"></i>Send Message
-                    </button>
-                    <button type="button" class="btn btn-danger" id="clear-btn">
-                        <i class="fas fa-trash me-2"></i>Clear
-                    </button>
-                </div>
-                
-                <div>
-                    <a href="/uploaddocument" class="btn btn-outline-primary w-100">
-                        <i class="fas fa-upload me-2"></i>Upload Documents
-                    </a>
                 </div>
             </div>
         </div>
@@ -651,7 +688,7 @@
                 $('#submit-btn, #clear-btn, #userinput').prop('disabled', !enabled);
                 
                 if (enabled) {
-                    $('#submit-btn').html('<i class="fas fa-paper-plane me-2"></i>Send Message');
+                    $('#submit-btn').html('<i class="fas fa-paper-plane me-2"></i>send');
                 } else {
                     $('#submit-btn').html('<i class="fas fa-spinner fa-spin me-2"></i>Processing...');
                 }

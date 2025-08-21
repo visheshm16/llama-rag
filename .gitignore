@@ -1,5 +1,6 @@
 # Created during setup
 milvus/
+milvus-backup
 huggingface_model/
 huggingface_embedder/
 logs/
