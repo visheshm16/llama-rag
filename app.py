@@ -17,6 +17,7 @@ import json
 
 from langchain_core.documents import Document
 from langchain.text_splitter import TokenTextSplitter
+from langchain_community.utilities import SQLDatabase
 
 import pandas as pd
 from PyPDF2 import PdfReader
@@ -38,6 +39,11 @@ CHUNK_OVERLAP = int(CHUNK_TOKENS_SIZE * 0.1) # 10% of chunk size
 # EMBEDDING_DIM = 768  # Value for sentence-transformers/all-mpnet-base-v2
 EMBEDDING_DIM = 1024  # Value for amazon.titan-embed-text-v2:0
 ENCODING_NAME = "cl100k_base"  # Byte Pair Encoding (BPE)
+
+mysql_uri = f"mysql+mysqlconnector://{os.getenv('SQL_USERNAME')}:{os.getenv('SQL_PASSWORD')}@{os.getenv('SQL_HOST')}:{os.getenv('SQL_PORT')}/{os.getenv('SQL_DATABASE')}"
+db = SQLDatabase.from_uri(mysql_uri)
+schema = db.get_table_info()
+print("Connected to database ✅")
 
 # Initialize global variables
 text_splitter = TokenTextSplitter(chunk_size=CHUNK_TOKENS_SIZE, chunk_overlap=CHUNK_OVERLAP, encoding_name=ENCODING_NAME)
@@ -67,6 +73,60 @@ sys_prompt = """You are a helpful question-answering chatbot. Use the provided c
 - If no sources were used, no citation is needed.
 - If no relevant documents were found then do not mention any sources.
 - Format all responses using HTML tags (<p>, <b>, <ul>, <li>, etc.). Do NOT use Markdown formatting."""
+
+sql_gen_template = """Based on the table schema below, write a SQL query that would answer the user's question:
+{schema}
+
+- If required, use joins, aggregate functions, and do computations as per the question. 
+- Always try to avoid fetching excessively large result sets — if the query could return many rows, include an appropriate LIMIT clause (e.g., LIMIT 50). 
+- If the user explicitly specifies the number of rows, respect their request.
+- Return RAW SQL query ONLY.
+"""
+
+def clean_sql(sql: str) -> str:
+    # extract ```sql...``` part
+    if "```sql" in sql:
+        sql = sql.split("```sql")[1]
+        sql = sql.split("```")[0]
+    elif "```" in sql:
+        sql = sql.split("```")[1]
+        sql = sql.split("```")[0]
+    else:
+        sql = sql.strip()
+    
+    sql = sql.replace("\t", " ")
+    sql = sql.replace("\n", " ")
+    sql = re.sub(r'\s+', ' ', sql)  # replace multiple spaces with a single space
+    return sql
+
+def get_sql_response(query : str):
+    messages = [
+        {"role": "user", "content": [{"text": sql_gen_template.format(schema=schema)}, {"text": query}]}
+    ]
+
+    print("Generating SQL for query: ", query)
+    model_response = bedrock.converse(
+        modelId=BEDROCK_LLM_MODEL_ID,
+        messages=messages,
+        system=[{"text": "You are a SQL generator. Generate syntactically correct SQL queries."}],
+        inferenceConfig={
+            'maxTokens': 512,
+            'temperature': 0,
+            'topP': 0.95,
+        },
+    )
+    sql = model_response["output"]["message"]["content"][0]["text"]
+    sql = clean_sql(sql)
+    print("Generated SQL: ", sql)
+    
+    try:
+        db_response = db.run(sql)
+    except Exception as e:
+        print(f"Error executing SQL query: {e}")
+        db_response = "No results from SQL Database."
+    print("SQL Response: ", db_response)
+    return "# SQL Command:\n" + sql + "\n# DB response:\n" + db_response
+
 
 # Embed one text chunk
 def embed_text(text):
@@ -258,8 +318,8 @@ def fetch_response():
         # print(doc)
         context += f"{idx}, RELEVANCE: {doc.metadata.get('distance', 'unknown')}\n{doc.page_content}\n-----\n"
     
+    context += get_sql_response(query)
     context += "### End of Context\n"
-
     print(context)
 
     messages = [
