@@ -8,7 +8,7 @@ threads = int(os.environ.get('GUNICORN_THREADS', '1'))
 
 timeout = int(os.environ.get('GUNICORN_TIMEOUT', '600'))
 
-bind = os.environ.get('GUNICORN_BIND', '127.0.0.1:8000')
+bind = os.environ.get('GUNICORN_BIND', '127.0.0.1:8080')
 
 # Increase max request size (in bytes)
 # 100MB = 100 * 1024 * 1024 = 104857600 bytes
