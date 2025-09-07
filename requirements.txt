@@ -12,3 +12,4 @@ boto3
 pandas
 tiktoken
 mysql-connector-python
+python-docx
