@@ -1,5 +1,6 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session
 from flask_cors import CORS
+from functools import wraps
 
 from io import BytesIO
 import time
@@ -16,7 +17,7 @@ import uuid
 import json
 
 from langchain_core.documents import Document
-from langchain.text_splitter import TokenTextSplitter
+from langchain_text_splitters import TokenTextSplitter
 from langchain_community.utilities import SQLDatabase
 
 import pandas as pd
@@ -40,10 +41,13 @@ CHUNK_OVERLAP = int(CHUNK_TOKENS_SIZE * 0.1) # 10% of chunk size
 EMBEDDING_DIM = 1024  # Value for amazon.titan-embed-text-v2:0
 ENCODING_NAME = "cl100k_base"  # Byte Pair Encoding (BPE)
 
-mysql_uri = f"mysql+mysqlconnector://{os.getenv('SQL_USERNAME')}:{os.getenv('SQL_PASSWORD')}@{os.getenv('SQL_HOST')}:{os.getenv('SQL_PORT')}/{os.getenv('SQL_DATABASE')}"
-db = SQLDatabase.from_uri(mysql_uri)
-schema = db.get_table_info()
-print("Connected to database ✅")
+USERNAME = os.getenv("RAG_USERNAME")
+PASSWORD = os.getenv("RAG_PASSWORD")
+
+# mysql_uri = f"mysql+mysqlconnector://{os.getenv('SQL_USERNAME')}:{os.getenv('SQL_PASSWORD')}@{os.getenv('SQL_HOST')}:{os.getenv('SQL_PORT')}/{os.getenv('SQL_DATABASE')}"
+# db = SQLDatabase.from_uri(mysql_uri)
+# schema = db.get_table_info()
+# print("Connected to database ✅")
 
 # Initialize global variables
 text_splitter = TokenTextSplitter(chunk_size=CHUNK_TOKENS_SIZE, chunk_overlap=CHUNK_OVERLAP, encoding_name=ENCODING_NAME)
@@ -83,49 +87,49 @@ sql_gen_template = """Based on the table schema below, write a SQL query that wo
 - Return RAW SQL query ONLY.
 """
 
-def clean_sql(sql: str) -> str:
-    # extract ```sql...``` part
-    if "```sql" in sql:
-        sql = sql.split("```sql")[1]
-        sql = sql.split("```")[0]
-    elif "```" in sql:
-        sql = sql.split("```")[1]
-        sql = sql.split("```")[0]
-    else:
-        sql = sql.strip()
+# def clean_sql(sql: str) -> str:
+#     # extract ```sql...``` part
+#     if "```sql" in sql:
+#         sql = sql.split("```sql")[1]
+#         sql = sql.split("```")[0]
+#     elif "```" in sql:
+#         sql = sql.split("```")[1]
+#         sql = sql.split("```")[0]
+#     else:
+#         sql = sql.strip()
     
-    sql = sql.replace("\t", " ")
-    sql = sql.replace("\n", " ")
-    sql = re.sub(r'\s+', ' ', sql)  # replace multiple spaces with a single space
-    return sql
+#     sql = sql.replace("\t", " ")
+#     sql = sql.replace("\n", " ")
+#     sql = re.sub(r'\s+', ' ', sql)  # replace multiple spaces with a single space
+#     return sql
 
-def get_sql_response(query : str):
-    messages = [
-        {"role": "user", "content": [{"text": sql_gen_template.format(schema=schema)}, {"text": query}]}
-    ]
+# def get_sql_response(query : str):
+#     messages = [
+#         {"role": "user", "content": [{"text": sql_gen_template.format(schema=schema)}, {"text": query}]}
+#     ]
 
-    print("Generating SQL for query: ", query)
-    model_response = bedrock.converse(
-        modelId=BEDROCK_LLM_MODEL_ID,
-        messages=messages,
-        system=[{"text": "You are a SQL generator. Generate syntactically correct SQL queries."}],
-        inferenceConfig={
-            'maxTokens': 512,
-            'temperature': 0,
-            'topP': 0.95,
-        },
-    )
-    sql = model_response["output"]["message"]["content"][0]["text"]
-    sql = clean_sql(sql)
-    print("Generated SQL: ", sql)
+#     print("Generating SQL for query: ", query)
+#     model_response = bedrock.converse(
+#         modelId=BEDROCK_LLM_MODEL_ID,
+#         messages=messages,
+#         system=[{"text": "You are a SQL generator. Generate syntactically correct SQL queries."}],
+#         inferenceConfig={
+#             'maxTokens': 512,
+#             'temperature': 0,
+#             'topP': 0.95,
+#         },
+#     )
+#     sql = model_response["output"]["message"]["content"][0]["text"]
+#     sql = clean_sql(sql)
+#     print("Generated SQL: ", sql)
     
-    try:
-        db_response = db.run(sql)
-    except Exception as e:
-        print(f"Error executing SQL query: {e}")
-        db_response = "No results from SQL Database."
-    print("SQL Response: ", db_response)
-    return "# SQL Command:\n" + sql + "\n# DB response:\n" + db_response
+#     try:
+#         db_response = db.run(sql)
+#     except Exception as e:
+#         print(f"Error executing SQL query: {e}")
+#         db_response = "No results from SQL Database."
+#     print("SQL Response: ", db_response)
+#     return "# SQL Command:\n" + sql + "\n# DB response:\n" + db_response
 
 
 # Embed one text chunk
@@ -206,16 +210,60 @@ def batch_index_documents(documents, batch_size=10):
 
 app = Flask(__name__)
 CORS(app)
+app.secret_key = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+
+# Login decorator to protect routes
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user' not in session:
+            return jsonify({"error": "Unauthorized. Please login first."}), 401
+        return f(*args, **kwargs)
+    return decorated_function
 
 @app.route('/')
 def index():
+    if 'user' not in session:
+        return redirect(url_for('login'))
     return render_template('index.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        data = request.json if request.is_json else request.form
+        username = data.get('username', '').strip()
+        password = data.get('password', '').strip()
+        
+        if not username or not password:
+            return jsonify({"error": "Username and password are required"}), 400
+        
+        if username == USERNAME and password == PASSWORD:
+            session['user'] = username
+            if request.is_json:
+                return jsonify({"message": "Login successful"}), 200
+            else:
+                return redirect(url_for('index'))
+        else:
+            if request.is_json:
+                return jsonify({"error": "Invalid credentials"}), 401
+            else:
+                return render_template('login.html', error="Invalid username or password"), 401
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
 
 @app.route('/uploaddocument')
 def upload_document():
+    if 'user' not in session:
+        return redirect(url_for('login'))
     return render_template('upload.html')
 
 @app.route('/indexdoc', methods=['POST'])
+@login_required
 def index_document():   
     uploaded_files = request.files.getlist('files')
     if not uploaded_files:
@@ -286,6 +334,7 @@ def index_document():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/fetchreponse', methods=['POST'])
+@login_required
 def fetch_response():
     data = request.json
     query = data.get('query', None)
@@ -318,7 +367,7 @@ def fetch_response():
         # print(doc)
         context += f"{idx}, RELEVANCE: {doc.metadata.get('distance', 'unknown')}\n{doc.page_content}\n-----\n"
     
-    context += get_sql_response(query)
+    # context += get_sql_response(query)
     context += "### End of Context\n"
     print(context)
 

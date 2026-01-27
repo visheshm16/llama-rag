@@ -3,372 +3,391 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Question Answering Assistant</title>
+    <title>AI Assistant</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
     <style>
+        :root {
+            /* Colorful, modern gradient palette */
+            --main-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            --accent-color: #764ba2;
+            --glass-surface: rgba(255, 255, 255, 0.85);
+            --glass-border: 1px solid rgba(255, 255, 255, 0.6);
+            --shadow-glass: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+            --user-msg-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --bot-msg-bg: #ffffff;
+            --text-primary: #2d3748;
+            --text-secondary: #718096;
+        }
+
         body {
-            background: linear-gradient(135deg, #00947b 0%, #1a567e 100%);
-            min-height: 97.5vh;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            /* A rich, modern deep gradient background */
+            background: var(--bg-gradient);
+            background-attachment: fixed;
+            min-height: 100vh;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
         }
         
-        .container-box {
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            overflow: hidden;
-            margin: 20px auto;
-            max-width: 95%;
+        /* Main Glass Container */
+        .app-container {
+            background: var(--glass-surface);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: var(--glass-border);
+            width: 100%;
+            max-width: 950px;
+            height: 90vh;
+            border-radius: 30px;
+            box-shadow: var(--shadow-glass);
             display: flex;
             flex-direction: column;
-            border: 1px solid #d4d8d0;
+            overflow: hidden;
+            position: relative;
         }
         
-        .header {
-            background: rgb(0, 29, 63);
-            color: rgb(255, 255, 255);
+        /* Header */
+        .app-header {
             padding: 20px 30px;
-        }
-        
-        .logo-container {
+            background: rgba(255, 255, 255, 0.4);
+            border-bottom: 1px solid rgba(160, 174, 192, 0.2);
             display: flex;
             align-items: center;
             justify-content: space-between;
+            z-index: 10;
+        }
+        
+        .logo-area {
+            display: flex;
+            align-items: center;
+            gap: 15px;
         }
         
         .logo {
-            height: 65px;
+            height: 40px;
             width: auto;
+            border-radius: 8px;
         }
         
-        .header-title {
-            font-size: 1.8rem;
-            font-weight: 600;
+        .app-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            background: var(--bg-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
             margin: 0;
-            text-align: center;
-            flex-grow: 1;
+            letter-spacing: -0.5px;
         }
-        
-        .about-link {
-            color: #ffffff !important;
+
+        .btn-about {
+            color: var(--text-secondary);
             text-decoration: none;
-            font-weight: bold;
-            transition: all 0.3s ease;
-            padding: 8px 16px;
-            border-radius: 20px;
-            background: rgba(255,255,255,0.1);
-        }
-        
-        .about-link:hover {
-            background: rgba(255,255,255,0.28);
-            transform: translateY(-2px);
-        }
-        
-        .main-content {
-            display: flex;
-            flex-direction: column;
-            flex: 1;
-            min-height: 700px;
-        }
-        
-        .chat-section {
-            flex: 1;
-            padding: 30px 30px 0 30px;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .input-section {
-            padding: 0 30px 30px 30px;
-            border-top: 1px solid #d4d8d0;
-            background: linear-gradient(180deg, #f7f8f5 0%, #f3f5f0 100%);
-        }
-        
-        .input-container {
-            margin-bottom: 10px;
-            margin-top: 10px;
-        }
-
-        /* New layout to place buttons beside textarea */
-        .input-flex {
-            display: flex;
-            gap: 15px;
-            align-items: stretch;
-        }
-
-        .textarea-wrapper {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .button-column {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            width: 180px;
-        }
-
-        .button-column .btn {
-            width: 100%;
-        }
-        
-        .form-label {
-            color: #333;
+            font-size: 0.9rem;
             font-weight: 600;
-            margin-bottom: 10px;
-        }
-        
-        .form-control {
-            border: 2px solid #e9ecef;
-            border-radius: 10px;
+            padding: 8px 18px;
+            border-radius: 50px;
+            background: rgba(255,255,255,0.5);
             transition: all 0.3s ease;
-            font-size: 1rem;
-            background: #ffffff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         }
-        
-        .form-control:focus {
-            border-color: #667eea;
-            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
-        }
-        
-        .button-group {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-        
-        .btn {
-            border-radius: 25px;
-            padding: 12px 24px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            border: none;
-        }
-        
-        .btn-success {
-            background: linear-gradient(135deg, #28a745, #20c997);
-            flex: 2;
-        }
-        
-        .btn-success:hover {
+
+        .btn-about:hover {
+            background: white;
+            color: var(--accent-color);
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
         }
         
-        .btn-danger {
-            background: linear-gradient(135deg, #dc3545, #e74c3c);
-            flex: 1;
-        }
-        
-        .btn-danger:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(220, 53, 69, 0.4);
-        }
-        
-        .btn:disabled {
-            opacity: 0.6;
-            transform: none !important;
-        }
-        
-        .chat-box {
-            background: #e7e7e7;
-            border-radius: 15px;
-            padding: 20px;
+        /* Chat Viewport */
+        .chat-viewport {
             flex: 1;
             overflow-y: auto;
-            border: 1px solid #d4d8d0;
-            margin-bottom: 20px;
+            padding: 30px;
+            /* Transparent to let the glass effect show */
+            background: transparent; 
+            scroll-behavior: smooth;
         }
         
-        .message {
-            margin-bottom: 15px;
-            padding: 15px;
-            border-radius: 15px;
-            max-width: 85%;
-            word-wrap: break-word;
+        .chat-viewport::-webkit-scrollbar {
+            width: 6px;
         }
-        
-        .user-message {
-            background: linear-gradient(135deg, #00947b, #1a567e);
-            color: white;
-            margin-left: auto;
-            border-bottom-right-radius: 5px;
+        .chat-viewport::-webkit-scrollbar-track {
+            background: transparent;
         }
-        
-        .bot-message {
-            background: white;
-            border: 2px solid #e9ecef;
-            margin-right: auto;
-            border-bottom-left-radius: 5px;
+        .chat-viewport::-webkit-scrollbar-thumb {
+            background-color: rgba(0,0,0,0.1);
+            border-radius: 20px;
         }
-        
-        .message-header {
-            font-weight: 600;
-            margin-bottom: 8px;
-            font-size: 0.9rem;
-        }
-        
-        .user-message .message-header {
-            color: rgba(255,255,255,0.9);
-        }
-        
-        .bot-message .message-header {
-            color: #1a567e;
-        }
-        
-        .loader-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
+
+        /* Message Bubbles */
+        .message-row {
+            display: flex;
+            margin-bottom: 24px;
             width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
+            animation: fadeIn 0.4s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message-row.user-row {
+            justify-content: flex-end;
+        }
+
+        .message-bubble {
+            max-width: 80%;
+            padding: 18px 22px;
+            position: relative;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+
+        .user-bubble {
+            background: var(--user-msg-bg);
+            color: white;
+            border-radius: 24px 24px 4px 24px;
         }
         
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 5px solid #f3f3f3;
-            border-top: 5px solid #667eea;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
+        .user-bubble .msg-meta {
+            color: rgba(255,255,255,0.85);
+        }
+
+        .bot-bubble {
+            background: var(--bot-msg-bg);
+            color: var(--text-primary);
+            border-radius: 24px 24px 24px 4px;
+            border: 1px solid rgba(0,0,0,0.03);
         }
         
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        .bot-bubble.error-border {
+            border-left: 4px solid #ff4757;
+            background: #fff5f5;
         }
-        
-        .typing-indicator {
+
+        .msg-meta {
+            font-size: 0.75rem;
+            margin-bottom: 5px;
+            font-weight: 500;
             display: flex;
             align-items: center;
-            gap: 5px;
-            color: #666;
-            font-style: italic;
+            gap: 6px;
+        }
+        
+        .user-bubble .msg-meta { justify-content: flex-end; }
+        .bot-bubble .msg-meta { color: var(--text-secondary); }
+
+        /* Input Area - Floating Pill Style */
+        .input-area {
+            padding: 0 30px 30px 30px;
+            background: transparent; 
+            position: relative;
+        }
+
+        .input-wrapper {
+            background: #ffffff;
+            border: 1px solid rgba(0,0,0,0.05);
+            border-radius: 24px;
+            padding: 10px;
+            box-shadow: 0 10px 40px -5px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .input-wrapper:focus-within {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 40px -5px rgba(102, 126, 234, 0.2);
+            border-color: #667eea;
+        }
+
+        textarea.custom-input {
+            border: none;
+            background: transparent;
+            resize: none;
+            width: 100%;
+            outline: none;
+            padding: 12px 15px;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 1rem;
+            max-height: 120px;
+            color: var(--text-primary);
+        }
+
+        .input-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 10px;
+            margin-top: 5px;
+            border-top: 1px solid #f7fafc;
+        }
+
+        .char-counter {
+            font-size: 0.75rem;
+            color: #a0aec0;
+            font-weight: 600;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        /* Modern Gradient Buttons */
+        .btn-modern {
+            border: none;
+            border-radius: 12px;
+            padding: 10px 14px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-send {
+            background: var(--bg-gradient);
+            color: white;
+            padding: 10px 24px;
+            font-weight: 600;
+            border-radius: 50px;
+            box-shadow: 0 4px 15px rgba(118, 75, 162, 0.3);
+        }
+        
+        .btn-send:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 6px 20px rgba(118, 75, 162, 0.4);
+        }
+        
+        .btn-send:disabled { 
+            background: #cbd5e1; 
+            cursor: not-allowed; 
+            transform: none; 
+            box-shadow: none;
+        }
+
+        .btn-icon {
+            background: #f7fafc;
+            color: #718096;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+        }
+        
+        .btn-icon:hover { 
+            background: #edf2f7; 
+            color: var(--accent-color);
+            transform: rotate(15deg);
+        }
+
+        .btn-danger-soft {
+            background: #fff5f5;
+            color: #fc8181;
+        }
+        .btn-danger-soft:hover {
+            background: #fee2e2;
+            color: #e53e3e;
+        }
+
+        /* Typing Animation */
+        .typing-bubble {
+            padding: 15px 20px;
+            background: white;
+            border-radius: 20px 20px 20px 4px;
+            width: fit-content;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            border: 1px solid rgba(0,0,0,0.03);
         }
         
         .typing-dots {
             display: flex;
-            gap: 3px;
+            gap: 5px;
         }
         
         .typing-dot {
             width: 6px;
             height: 6px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border-radius: 50%;
-            background: #1a567e;
-            animation: typing 1.4s infinite;
+            animation: pulse 1.4s infinite ease-in-out both;
         }
         
-        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
         
-        @keyframes typing {
-            0%, 60%, 100% { transform: translateY(0); }
-            30% { transform: translateY(-10px); }
+        @keyframes pulse {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
         }
-        
+
         @media (max-width: 768px) {
-            .input-section {
-                padding: 20px;
-            }
-            
-            .chat-section {
-                padding: 20px 20px 0 20px;
-            }
-            
-            .header-title {
-                font-size: 1.4rem;
-            }
-            
-            .logo-container {
-                flex-direction: column;
-                gap: 15px;
-                text-align: center;
-            }
-            
-            .input-flex {
-                flex-direction: column;
-            }
-            
-            .button-column {
-                width: 100%;
-                flex-direction: row;
-            }
-            
-            .button-column .btn {
-                flex: 1;
-            }
+            body { padding: 0; align-items: flex-start; }
+            .app-container { height: 100vh; border-radius: 0; max-width: 100%; border: none; }
+            .btn-text { display: none; } 
+            .btn-send { padding: 10px 14px; border-radius: 12px; }
+            .input-area { padding: 15px; }
         }
     </style>
 </head>
 <body>
-    <div class="container-box">
-        <div class="header">
-            <div class="logo-container">
-                <img class="logo" src="https://adamastech.in/wp-content/themes/atc-child/assets/images/atc-foot-logo.png" alt="ATC Logo">
-                <h1 class="header-title">Interactive Question Answering Assistant</h1>
+
+    <div class="app-container">
+        <header class="app-header">
+            <div class="logo-area">
+                <img class="logo" src="https://adamastech.in/wp-content/themes/atc-child/assets/images/atc-foot-logo.png" alt="Logo">
+                <h1 class="app-title">Assistant</h1>
+            </div>
+            <div>
                 <a href="https://adamastechconsulting.com/about-us/" 
-                   class="about-link"
+                   class="btn-about"
                    target="_blank" 
                    rel="noopener noreferrer">
-                    <i class="fas fa-info-circle me-2"></i>About Us
+                    <i class="fas fa-sparkles me-1"></i> About
                 </a>
             </div>
-        </div>
-        
-        <div class="loader-overlay" id="loader">
-            <div class="spinner"></div>
-        </div>
-        
-        <div class="main-content">
-            <div class="chat-section">
-                <h5 class="mb-3">
-                    <i class="fas fa-comments me-2"></i>Conversation History
-                </h5>
-                <div class="chat-box" id="modelresponse">
-                    <div class="message bot-message">
-                        <div class="message-header">
-                            <i class="fas fa-robot me-2"></i>Info-Fetcher
-                        </div>
-                        <div class="message-content">Hello! How can I help you today? Ask me anything about your uploaded documents.</div>
-                    </div>
-                </div>
+        </header>
+
+        <div class="chat-viewport" id="modelresponse">
             </div>
-            
-            <div class="input-section">
-                <div class="input-container">
-                    <label for="userinput" class="form-label h5">
-                        <i class="fas fa-question-circle me-2"></i>Ask your question...
-                    </label>
-                    <div class="input-flex">
-                        <div class="textarea-wrapper">
-                            <textarea class="form-control" 
-                                      id="userinput" 
-                                      rows="4" 
-                                      placeholder="Type your message here..."
-                                      maxlength="1000"></textarea>
-                            <div class="text-muted mt-2">
-                                <small><span id="charCount">0</span>/1000 characters</small>
-                            </div>
-                        </div>
-                        <div class="button-column">
-                            <button type="button" class="btn btn-success" id="submit-btn">
-                                <i class="fas fa-paper-plane me-2"></i>send
-                            </button>
-                            <button type="button" class="btn btn-danger" id="clear-btn">
-                                <i class="fas fa-trash me-2"></i>clear
-                            </button>
-                            <a href="/uploaddocument" class="btn btn-outline-primary">
-                                <i class="fas fa-upload me-2"></i>upload docs
-                            </a>
-                        </div>
+
+        <div class="input-area">
+            <div class="input-wrapper">
+                <textarea 
+                    id="userinput" 
+                    class="custom-input" 
+                    rows="1" 
+                    placeholder="Ask a question..."
+                    maxlength="1000"></textarea>
+                
+                <div class="input-toolbar">
+                    <span class="char-counter"><span id="charCount">0</span>/1000</span>
+                    
+                    <div class="action-buttons">
+                        <button type="button" class="btn-modern btn-icon btn-danger-soft" id="clear-btn" title="Clear Chat">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                        
+                        <a href="/uploaddocument" class="btn-modern btn-icon" title="Upload Documents">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                        </a>
+
+                        <button type="button" class="btn-modern btn-send" id="submit-btn">
+                            <span class="btn-text me-2">Send</span>
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -383,7 +402,7 @@
             let isProcessing = false;
             let chatHistory = [];
             
-            // Cookie utility functions
+            // --- Logic remains exactly unchanged ---
             function setCookie(name, value, days = 7) {
                 const expires = new Date();
                 expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
@@ -410,13 +429,9 @@
             
             function saveChatHistory() {
                 try {
-                    // Limit to last 50 messages to avoid cookie size limits (cookies have ~4KB limit)
                     const limitedHistory = chatHistory.slice(-50);
                     const historyJson = JSON.stringify(limitedHistory);
-                    
-                    // Check if the data is too large for cookies (~4KB limit)
                     if (historyJson.length > 3500) {
-                        // If too large, keep only the last 25 messages
                         const shorterHistory = chatHistory.slice(-25);
                         setCookie('chatHistory', JSON.stringify(shorterHistory), 7);
                     } else {
@@ -434,40 +449,29 @@
                         const parsedHistory = JSON.parse(historyJson);
                         if (Array.isArray(parsedHistory) && parsedHistory.length > 0) {
                             chatHistory = parsedHistory;
-                            console.log(chatHistory)
                             return true;
                         }
                     }
                 } catch (error) {
-                    console.warn('Failed to load chat history from cookies:', error);
-                    // Clear corrupted cookie
                     deleteCookie('chatHistory');
                 }
                 return false;
             }
             
-            // Initialize chat history on page load
             loadChatHistory();
             
-            // Character counter
             $('#userinput').on('input', function() {
                 const count = $(this).val().length;
                 $('#charCount').text(count);
-                
-                if (count > 950) {
-                    $('#charCount').addClass('text-warning');
-                } else {
-                    $('#charCount').removeClass('text-warning');
-                }
+                if (count > 950) $('#charCount').addClass('text-danger');
+                else $('#charCount').removeClass('text-danger');
             });
             
-            // Auto-resize textarea
             $('#userinput').on('input', function() {
                 this.style.height = 'auto';
                 this.style.height = (this.scrollHeight) + 'px';
             });
             
-            // Send message on Enter (Shift+Enter for new line)
             $('#userinput').keydown(function(e) {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -475,92 +479,85 @@
                 }
             });
             
-            // Submit button click
             $('#submit-btn').click(function() {
                 sendMessage();
             });
             
-            // Clear button click
             $('#clear-btn').click(function() {
                 clearChat();
             });
 
+            // Colorful UI Message Appender
             function appendMessage(sender, content, isError = false) {
-                const timestamp = new Date().toLocaleTimeString();
-                const messageClass = sender === 'user' ? 'user-message' : 'bot-message';
-                const icon = sender === 'user' ? 'fas fa-user' : 'fas fa-robot';
-                const senderName = sender === 'user' ? 'You' : 'Info-Fetcher';
+                const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const isUser = sender === 'user';
+                const rowClass = isUser ? 'user-row' : 'bot-row';
+                const bubbleClass = isUser ? 'user-bubble' : 'bot-bubble';
+                const name = isUser ? 'You' : 'Assistant';
+                const extraClass = isError ? 'error-border' : '';
                 
                 let messageHtml = `
-                    <div class="message ${messageClass}">
-                        <div class="message-header">
-                            <i class="${icon} me-2"></i>${senderName}
-                            <small class="ms-2 opacity-75">${timestamp}</small>
+                    <div class="message-row ${rowClass}">
+                        <div class="message-bubble ${bubbleClass} ${extraClass}">
+                            <div class="msg-meta">
+                                <span>${name}</span>
+                                <span>${timestamp}</span>
+                            </div>
+                            <div class="message-text">${content}</div>
                         </div>
-                        <div class="message-content">${content}</div>
                     </div>
                 `;
-                
-                if (isError) {
-                    messageHtml = messageHtml.replace('bot-message', 'bot-message border-danger');
-                }
                 
                 $('#modelresponse').append(messageHtml);
                 scrollToBottom();
             }
             
             function loadChatHistory() {
-                // Try to load chat history from cookies first
                 const historyLoaded = loadChatHistoryFromCookie();
-                
                 if (historyLoaded && chatHistory.length > 0) {
-                    // If history exists in cookies, clear the default welcome message and load from cookies
                     $('#modelresponse').empty();
                     renderChatHistory();
                 } else {
-                    // If no history in cookies, keep the default HTML welcome message and sync it to cache
                     const welcomeMessage = {
                         sender: 'bot',
-                        content: 'Hello! How can I help you today? Ask me anything about your uploaded documents.',
+                        content: 'Hello! I am your AI assistant. I can help answer questions about your documents.',
                         timestamp: new Date().toISOString(),
                         isError: false
                     };
                     chatHistory = [welcomeMessage];
                     saveChatHistory();
-                    // Don't re-render since the welcome message is already in the HTML
+                    $('#modelresponse').empty();
+                    renderMessage('bot', welcomeMessage.content, welcomeMessage.timestamp, false);
                 }
             }
             
             function renderChatHistory() {
                 $('#modelresponse').empty();
-                
                 chatHistory.forEach(function(message) {
                     renderMessage(message.sender, message.content, message.timestamp, message.isError);
                 });
-                
                 scrollToBottom();
             }
             
             function renderMessage(sender, content, timestamp, isError = false) {
-                const messageTime = new Date(timestamp).toLocaleTimeString();
-                const messageClass = sender === 'user' ? 'user-message' : 'bot-message';
-                const icon = sender === 'user' ? 'fas fa-user' : 'fas fa-robot';
-                const senderName = sender === 'user' ? 'You' : 'Info-Fetcher';
+                const timeStr = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const isUser = sender === 'user';
+                const rowClass = isUser ? 'user-row' : 'bot-row';
+                const bubbleClass = isUser ? 'user-bubble' : 'bot-bubble';
+                const name = isUser ? 'You' : 'Assistant';
+                const extraClass = isError ? 'error-border' : '';
                 
                 let messageHtml = `
-                    <div class="message ${messageClass}">
-                        <div class="message-header">
-                            <i class="${icon} me-2"></i>${senderName}
-                            <small class="ms-2 opacity-75">${messageTime}</small>
+                    <div class="message-row ${rowClass}">
+                        <div class="message-bubble ${bubbleClass} ${extraClass}">
+                            <div class="msg-meta">
+                                <span>${name}</span>
+                                <span>${timeStr}</span>
+                            </div>
+                            <div class="message-text">${content}</div>
                         </div>
-                        <div class="message-content">${content}</div>
                     </div>
                 `;
-                
-                if (isError) {
-                    messageHtml = messageHtml.replace('bot-message', 'bot-message border-danger');
-                }
-                
                 $('#modelresponse').append(messageHtml);
             }
             
@@ -571,10 +568,7 @@
                     timestamp: new Date().toISOString(),
                     isError: isError
                 };
-                
                 chatHistory.push(message);
-                
-                // Save to cookies after adding new message
                 saveChatHistory();
             }
             
@@ -582,26 +576,17 @@
                 if (isProcessing) return;
                 
                 const userInput = $('#userinput').val().trim();
-                if (!userInput) {
-                    showAlert('warning', 'Please enter a question first.');
-                    return;
-                }
+                if (!userInput) return;
                 
-                // Add user message to chat and cache
                 addMessageToHistory('user', userInput);
                 appendMessage('user', userInput);
                 
-                // Clear input and reset height
                 $('#userinput').val('').css('height', 'auto');
                 $('#charCount').text('0');
                 
-                // Show typing indicator
                 showTypingIndicator();
-                
-                // Disable form
                 setFormState(false);
                 
-                // Send AJAX request
                 $.ajax({
                     url: '/fetchreponse',
                     type: 'POST',
@@ -610,23 +595,17 @@
                     success: function(response) {
                         hideTypingIndicator();
                         const botResponse = response.message || 'I received your question but couldn\'t generate a proper response.';
-                        
-                        // Add bot response to cache and display
                         addMessageToHistory('bot', botResponse, false);
                         appendMessage('bot', botResponse);
                     },
                     error: function(xhr) {
                         hideTypingIndicator();
-                        let errorMessage = 'Sorry, I encountered an error while processing your request.';
-                        
+                        let errorMessage = 'Sorry, I encountered an error.';
                         try {
                             const response = JSON.parse(xhr.responseText);
                             errorMessage = response.error || errorMessage;
-                        } catch (e) {
-                            // Use default error message
-                        }
+                        } catch (e) {}
                         
-                        // Add error response to cache and display
                         addMessageToHistory('bot', errorMessage, true);
                         appendMessage('bot', errorMessage, true);
                     },
@@ -639,16 +618,14 @@
                       
             function showTypingIndicator() {
                 const typingHtml = `
-                    <div class="message bot-message typing-indicator" id="typing-indicator">
-                        <div class="message-header">
-                            <i class="fas fa-robot me-2"></i>Info-Fetcher
+                    <div class="message-row bot-row" id="typing-indicator">
+                        <div class="typing-bubble">
+                            <div class="typing-dots">
+                                <div class="typing-dot"></div>
+                                <div class="typing-dot"></div>
+                                <div class="typing-dot"></div>
+                            </div>
                         </div>
-                        <div class="typing-dots">
-                            <div class="typing-dot"></div>
-                            <div class="typing-dot"></div>
-                            <div class="typing-dot"></div>
-                        </div>
-                        <span class="ms-2">is typing...</span>
                     </div>
                 `;
                 $('#modelresponse').append(typingHtml);
@@ -660,25 +637,18 @@
             }
             
             function clearChat() {
-                // Clear the chat history cache completely
                 chatHistory = [];
-                
-                // Delete the chat history cookie
                 deleteCookie('chatHistory');
                 
-                // Add fresh welcome message to cache
                 const welcomeMessage = {
                     sender: 'bot',
-                    content: 'Hello! How can I help you today? Ask me anything about your uploaded documents.',
+                    content: 'History cleared. How can I help you today?',
                     timestamp: new Date().toISOString(),
                     isError: false
                 };
                 chatHistory.push(welcomeMessage);
-                
-                // Save the new state to cookies
                 saveChatHistory();
                 
-                // Clear and reload the display
                 $('#modelresponse').empty();
                 renderChatHistory();
             }
@@ -688,9 +658,9 @@
                 $('#submit-btn, #clear-btn, #userinput').prop('disabled', !enabled);
                 
                 if (enabled) {
-                    $('#submit-btn').html('<i class="fas fa-paper-plane me-2"></i>send');
+                    $('#submit-btn').html('<span class="btn-text me-2">Send</span><i class="fas fa-paper-plane"></i>');
                 } else {
-                    $('#submit-btn').html('<i class="fas fa-spinner fa-spin me-2"></i>Processing...');
+                    $('#submit-btn').html('<i class="fas fa-spinner fa-spin"></i>');
                 }
             }
             
@@ -699,12 +669,6 @@
                 chatBox.scrollTop(chatBox[0].scrollHeight);
             }
             
-            function showAlert(type, message) {
-                // You can implement a toast notification here if needed
-                console.log(`${type}: ${message}`);
-            }
-            
-            // Focus on input when page loads
             $('#userinput').focus();
         });
     </script>
